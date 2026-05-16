@@ -18,7 +18,9 @@ load_dotenv()
 
 import os
 ADMIN_ID = 1647176037
-TOKEN = os.getenv("TOKEN")
+import os
+
+TOKEN = os.environ["TOKEN"]
 
 
 logging.basicConfig(
