@@ -69,6 +69,14 @@ CREATE TABLE IF NOT EXISTS sections (
 )
 """)
 
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS section_categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    subject TEXT,
+    source TEXT,
+    practice TEXT
+)
+""")
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS user_answers (
@@ -158,6 +166,14 @@ cursor.execute("""
 CREATE INDEX IF NOT EXISTS idx_section_answers_combo
 ON section_answers(section_id)
 """)
+
+try:
+    cursor.execute("""
+    ALTER TABLE sections
+    ADD COLUMN category_id INTEGER
+    """)
+except:
+    pass
 
 conn.commit()
 
@@ -394,7 +410,33 @@ LANGS = {
         "mode_label": "Rejim",
         "results_title": "📊 Natijalar",
         "no_answer_text": "javob yo‘q",
-            
+        "add_source": "➕ Source qo'shish",
+        "add_practice": "➕ Practice qo'shish",
+        "add_test": "➕ Test qo'shish",
+        
+        "select_subject": "📚 Subject tanlang:",
+        "select_source": "📂 Source tanlang:",
+        "select_practice": "📝 Practice tanlang:",
+        "select_test": "📄 Test tanlang:",
+        
+        "enter_source_name": "Source nomini kiriting:",
+        "enter_practice_name": "Practice nomini kiriting:",
+        
+        "source_added": "✅ Source qo'shildi",
+        "practice_added": "✅ Practice qo'shildi",
+        
+        "step_subject": "1️⃣ Subject tanlang:",
+        "step_source": "2️⃣ Source tanlang:",
+        "step_practice": "3️⃣ Practice tanlang:",
+        "step_test": "4️⃣ Test tanlang:",
+        
+        "english_subject": "English",
+        "math_subject": "Math",
+        
+        "no_practices": "❗ Practicelar topilmadi",
+        "no_tests": "❗ Testlar topilmadi",
+        "no_sources": "❗ Sourcelar topilmadi",
+                
     },
 
     "ru": {
@@ -503,6 +545,32 @@ LANGS = {
         "mode_label": "Режим",
         "results_title": "📊 Результаты",
         "no_answer_text": "нет ответа",
+        "add_source": "➕ Добавить Source",
+        "add_practice": "➕ Добавить Practice",
+        "add_test": "➕ Добавить Test",
+        
+        "select_subject": "📚 Выберите предмет:",
+        "select_source": "📂 Выберите source:",
+        "select_practice": "📝 Выберите practice:",
+        "select_test": "📄 Выберите тест:",
+        
+        "enter_source_name": "Введите название source:",
+        "enter_practice_name": "Введите название practice:",
+        
+        "source_added": "✅ Source добавлен",
+        "practice_added": "✅ Practice добавлен",
+        
+        "step_subject": "1️⃣ Выберите предмет:",
+        "step_source": "2️⃣ Выберите source:",
+        "step_practice": "3️⃣ Выберите practice:",
+        "step_test": "4️⃣ Выберите тест:",
+
+    "english_subject": "English",
+    "math_subject": "Math",
+
+    "no_practices": "❗ Practices не найдены",
+    "no_tests": "❗ Тесты не найдены",
+    "no_sources": "❗ Sources не найдены",
             
     },
 
@@ -612,6 +680,32 @@ LANGS = {
         "mode_label": "Mode",
         "results_title": "📊 Results",
         "no_answer_text": "no answer",
+        "add_source": "➕ Add Source",
+        "add_practice": "➕ Add Practice",
+        "add_test": "➕ Add Test",
+        
+        "select_subject": "📚 Choose subject:",
+        "select_source": "📂 Choose source:",
+        "select_practice": "📝 Choose practice:",
+        "select_test": "📄 Choose test:",
+        
+        "enter_source_name": "Enter source name:",
+        "enter_practice_name": "Enter practice name:",
+        
+        "source_added": "✅ Source added",
+        "practice_added": "✅ Practice added",
+        
+        "step_subject": "1️⃣ Choose subject:",
+        "step_source": "2️⃣ Choose source:",
+        "step_practice": "3️⃣ Choose practice:",
+        "step_test": "4️⃣ Choose test:",
+
+    "english_subject": "English",
+    "math_subject": "Math",
+    
+    "no_practices": "❗ No practices found",
+    "no_tests": "❗ No tests found",
+    "no_sources": "❗ No sources found",
     }
 }
 def get_main_menu(user_id):
@@ -631,7 +725,9 @@ def get_admin_menu():
 
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text=tr_admin("add_section"))],
+            [KeyboardButton(text=tr_admin("add_source"))],
+            [KeyboardButton(text=tr_admin("add_practice"))],
+            [KeyboardButton(text=tr_admin("add_test"))],
             [KeyboardButton(text=tr_admin("edit_section"))],
             [KeyboardButton(text=tr_admin("upload_file"))],
             [KeyboardButton(text=tr_admin("users"))],
@@ -659,6 +755,21 @@ class AddSection(StatesGroup):
     time = State()
     mode = State()
 
+class AddSource(StatesGroup):
+    subject = State()
+    source = State()
+
+class AddPractice(StatesGroup):
+    category = State()
+    practice = State()
+
+class AddTest(StatesGroup):
+    subject = State()
+    source = State()
+    practice = State()
+    title = State()
+    time = State()
+    mode = State()
 
 class RenameSection(StatesGroup):
     new_name = State()
@@ -1135,7 +1246,6 @@ async def delete_sec(callback: CallbackQuery):
     await callback.answer()
     if callback.from_user.id != ADMIN_ID:
         return
-    await callback.answer()
     sec = temp[callback.from_user.id]["edit_sec"]
     cursor.execute("DELETE FROM sections WHERE id=?", (sec,))
     cursor.execute("DELETE FROM questions WHERE section_id=?", (sec,))
@@ -1164,7 +1274,6 @@ async def rename_start(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     if callback.from_user.id != ADMIN_ID:
         return
-    await callback.answer()
     await callback.message.answer(
         tr(callback.from_user.id, "new_name")
     )
@@ -1336,30 +1445,7 @@ async def save_new_age(message: Message, state: FSMContext):
         tr(message.from_user.id, "age_updated")
     )
     await state.clear()
-    
 
-
-@dp.message(is_menu_text("sections"))
-async def show_sections(message: Message):
-    cursor.execute("SELECT * FROM sections")
-    secs = cursor.fetchall()
-
-    if not secs:
-        return await message.answer(
-            tr(message.from_user.id, "no_sections_exist")
-        )
-
-    kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text=s[1], callback_data=f"startsec_{s[0]}")]
-            for s in secs
-        ]
-    )
-
-    await message.answer(
-        tr(message.from_user.id, "choose_section"),
-        reply_markup=kb
-    )
     
 @dp.callback_query(F.data.startswith("startsec_"))
 async def start_test(callback: CallbackQuery):
@@ -1372,12 +1458,12 @@ async def start_test(callback: CallbackQuery):
             show_alert=True
         )
 
-    await callback.answer()
-    await callback.answer()
+    
     user_id = callback.from_user.id
     if callback.from_user.id != ADMIN_ID:
         if not await callback_spam_check(callback):
             return
+    await callback.answer()
     if user_id in sessions:
         return await callback.message.answer(
             tr(user_id, "finish_old_test")
@@ -1441,7 +1527,6 @@ async def start_with_time(callback: CallbackQuery):
         )
 
     await callback.answer()
-    await callback.answer()
     sec_id = int(callback.data.split("_")[2])
     user_id = callback.from_user.id
     if callback.from_user.id != ADMIN_ID:
@@ -1464,7 +1549,6 @@ async def start_without_time(callback: CallbackQuery):
             show_alert=True
         )
 
-    await callback.answer()
     await callback.answer()
     sec_id = int(callback.data.split("_")[2])
     user_id = callback.from_user.id
@@ -1497,7 +1581,13 @@ async def start_real_test(callback, user_id, sec_id, time_limit):
         tr(user_id, "test_started_text"),
         reply_markup=kb
     )
+    
+    cursor.execute("""
+        DELETE FROM user_answers
+        WHERE user_id=? AND section_id=?
+    """, (user_id, sec_id))
 
+    conn.commit()
     # 🔥 TIMER FAQAT BOR BO‘LSA
     if time_limit:
         timer_msg = await callback.message.answer(
@@ -1508,12 +1598,7 @@ async def start_real_test(callback, user_id, sec_id, time_limit):
             timer(user_id, time_limit * 60)
         )
         
-        cursor.execute("""
-            DELETE FROM user_answers
-            WHERE user_id=? AND section_id=?
-        """, (user_id, sec_id))
-
-        conn.commit()
+        
         
         sessions[user_id] = {
             "started_at": datetime.now(),
@@ -1573,7 +1658,6 @@ async def set_file_section(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     if callback.from_user.id != ADMIN_ID:
         return
-    await callback.answer()
     sec_id = int(callback.data.split("_")[1])
 
     # ❌ eski
@@ -1649,8 +1733,8 @@ async def receive_answers(message: Message, state: FSMContext):
             # o‘rtadagi qism = javob
             ans = "-".join(parts[1:-1]).upper()
 
-        except:
-            continue
+        except Exception as e:
+            logging.error(e)
 
         cursor.execute("""
             INSERT INTO section_answers
@@ -1747,7 +1831,6 @@ async def show_leaderboard(callback: CallbackQuery):
             return
     if callback.from_user.id != ADMIN_ID:
         return
-    await callback.answer()
 
     sec_id = int(callback.data.split("_")[1])
     
@@ -1816,7 +1899,6 @@ async def user_info(callback: CallbackQuery):
             return
     if callback.from_user.id != ADMIN_ID:
         return
-    await callback.answer()
 
     uid = int(callback.data.split("_")[1])
 
@@ -1879,13 +1961,11 @@ async def user_section_result(callback: CallbackQuery):
             show_alert=True
         )
 
-    await callback.answer()
     if callback.from_user.id != ADMIN_ID:
         if not await callback_spam_check(callback):
             return
     if callback.from_user.id != ADMIN_ID:
         return
-    await callback.answer()
     parts = callback.data.split("_")
 
     uid = int(parts[1])
@@ -2177,8 +2257,6 @@ async def finish_test(callback: CallbackQuery):
             show_alert=True
         )
 
-    await callback.answer()
-
 
     # 🔥 callback spam check
     if not await callback_spam_check(callback):
@@ -2308,9 +2386,459 @@ async def errors_handler(event: ErrorEvent):
 async def main():
     await dp.start_polling(bot)
 
+ 
+        
+@dp.message(is_menu_text("add_source"))
+async def add_source_start(message: Message, state: FSMContext):
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="English",
+                    callback_data="subject_english"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Math",
+                    callback_data="subject_math"
+                )
+            ]
+        ]
+    )
+
+    await message.answer(
+        "1-Bo'limni tanlang:",
+        reply_markup=kb
+    )
+
+    await state.set_state(AddSource.subject)
+
+@dp.callback_query(
+    AddSource.subject,
+    F.data.startswith("subject_")
+)
+async def source_subject(callback: CallbackQuery, state: FSMContext):
+
+    subject = callback.data.split("_")[1]
+
+    await state.update_data(subject=subject)
+
+    await callback.message.answer(
+        tr(callback.from_user.id, "enter_source_name")
+    )
+
+    await state.set_state(AddSource.source)
+
+
+@dp.message(AddSource.source)
+async def save_source(message: Message, state: FSMContext):
+
+    data = await state.get_data()
+
+    cursor.execute("""
+        INSERT INTO section_categories
+        (subject, source, practice)
+        VALUES (?, ?, ?)
+    """, (
+        data["subject"],
+        message.text,
+        ""
+    ))
+
+    conn.commit()
+
+    await message.answer(
+        tr(message.from_user.id, "source_added")
+    )
+
+    await state.clear()
+    
+@dp.message(is_menu_text("add_practice"))
+async def add_practice_start(message: Message):
+
+    cursor.execute("""
+        SELECT id, subject, source
+        FROM section_categories
+        WHERE practice=''
+    """)
+
+    rows = cursor.fetchall()
+
+    buttons = []
+
+    for r in rows:
+        buttons.append([
+            InlineKeyboardButton(
+                text=f"{r[1]} | {r[2]}",
+                callback_data=f"practicecat_{r[0]}"
+            )
+        ])
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=buttons
+    )
+
+    await message.answer(
+        "Source tanlang:",
+        reply_markup=kb
+    )
+
+@dp.callback_query(F.data.startswith("practicecat_"))
+async def choose_practice_category(
+    callback: CallbackQuery,
+    state: FSMContext
+):
+
+    cat_id = int(callback.data.split("_")[1])
+
+    await state.update_data(category_id=cat_id)
+
+    await callback.message.answer(
+        tr(user_id, "enter_practice_name")
+    )
+
+    await state.set_state(AddPractice.practice)
+    
+@dp.message(AddPractice.practice)
+async def save_practice(message: Message, state: FSMContext):
+
+    data = await state.get_data()
+
+    cursor.execute("""
+        SELECT subject, source
+        FROM section_categories
+        WHERE id=?
+    """, (data["category_id"],))
+
+    row = cursor.fetchone()
+
+    cursor.execute("""
+        INSERT INTO section_categories
+        (subject, source, practice)
+        VALUES (?, ?, ?)
+    """, (
+        row[0],
+        row[1],
+        message.text
+    ))
+
+    conn.commit()
+
+    await message.answer(
+        tr(user_id, "practice_added")
+    )
+
+    await state.clear()
+    
+@dp.message(is_menu_text("add_test"))
+async def add_test_start(message: Message, state: FSMContext):
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="English",
+                    callback_data="testsub_english"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Math",
+                    callback_data="testsub_math"
+                )
+            ]
+        ]
+    )
+
+    await message.answer(
+        tr(message.from_user.id, "select_subject"),
+        reply_markup=kb
+    )
+
+    await state.set_state(AddTest.subject)
+    
+@dp.callback_query(
+    AddTest.subject,
+    F.data.startswith("testsub_")
+)
+async def add_test_source(callback: CallbackQuery, state: FSMContext):
+
+    subject = callback.data.split("_")[1]
+
+    await state.update_data(subject=subject)
+
+    cursor.execute("""
+        SELECT DISTINCT source
+        FROM section_categories
+        WHERE subject=?
+    """, (subject,))
+
+    rows = cursor.fetchall()
+
+    buttons = []
+
+    for r in rows:
+        buttons.append([
+            InlineKeyboardButton(
+                text=r[0],
+                callback_data=f"testsource_{r[0]}"
+            )
+        ])
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=buttons
+    )
+
+    await callback.message.edit_text(
+        tr(callback.from_user.id, "select_source"),
+        reply_markup=kb
+    )
+
+    await state.set_state(AddTest.source)
+    
+@dp.callback_query(
+    AddTest.source,
+    F.data.startswith("testsource_")
+)
+async def add_test_practice(callback: CallbackQuery, state: FSMContext):
+
+    source = callback.data.split("_", 1)[1]
+
+    data = await state.get_data()
+
+    await state.update_data(source=source)
+
+    cursor.execute("""
+        SELECT id, practice
+        FROM section_categories
+        WHERE subject=? AND source=? AND practice!=''
+    """, (
+        data["subject"],
+        source
+    ))
+
+    rows = cursor.fetchall()
+
+    buttons = []
+
+    for r in rows:
+        buttons.append([
+            InlineKeyboardButton(
+                text=r[1],
+                callback_data=f"testpractice_{r[0]}"
+            )
+        ])
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=buttons
+    )
+
+    await callback.message.edit_text(
+        tr(callback.from_user.id, "select_practice"),
+        reply_markup=kb
+    )
+
+    await state.set_state(AddTest.practice)
+    
+@dp.callback_query(
+    AddTest.practice,
+    F.data.startswith("testpractice_")
+)
+async def add_test_title(callback: CallbackQuery, state: FSMContext):
+
+    category_id = int(callback.data.split("_")[1])
+
+    await state.update_data(category_id=category_id)
+
+    await callback.message.answer(
+        tr(callback.from_user.id, "section_name")
+    )
+
+    await state.set_state(AddTest.title)
+    
+@dp.message(AddTest.title)
+async def add_test_time(message: Message, state: FSMContext):
+
+    await state.update_data(title=message.text)
+
+    await message.answer(
+        tr(message.from_user.id, "time_input")
+    )
+
+    await state.set_state(AddTest.time)
+    
+@dp.message(AddTest.time)
+async def add_test_mode(message: Message, state: FSMContext):
+
+    if not message.text.isdigit():
+        return await message.answer(
+            tr(message.from_user.id, "numbers_only")
+        )
+
+    await state.update_data(
+        time=int(message.text)
+    )
+
+    await message.answer(
+        tr(message.from_user.id, "choose_mode_admin")
+    )
+
+    await state.set_state(AddTest.mode)
+    
+@dp.message(AddTest.mode)
+async def save_test(message: Message, state: FSMContext):
+
+    mode = "fixed" if message.text == "1" else "flex"
+
+    data = await state.get_data()
+
+    cursor.execute("""
+        INSERT INTO sections
+        (title, time_limit, mode, category_id)
+        VALUES (?, ?, ?, ?)
+    """, (
+        data["title"],
+        data["time"],
+        mode,
+        data["category_id"]
+    ))
+
+    conn.commit()
+
+    await message.answer(
+        tr(message.from_user.id, "section_added")
+    )
+
+    await state.clear()
+    
+@dp.message(is_menu_text("sections"))
+async def choose_subject(message: Message):
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="English",
+                    callback_data="usersub_english"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Math",
+                    callback_data="usersub_math"
+                )
+            ]
+        ]
+    )
+
+    await message.answer(
+        "1️⃣ Subject tanlang:",
+        reply_markup=kb
+    )
+    
+@dp.callback_query(F.data.startswith("usersub_"))
+async def user_choose_source(callback: CallbackQuery):
+
+    subject = callback.data.split("_")[1]
+
+    cursor.execute("""
+        SELECT DISTINCT source
+        FROM section_categories
+        WHERE subject=?
+    """, (subject,))
+
+    rows = cursor.fetchall()
+
+    buttons = []
+
+    for r in rows:
+        buttons.append([
+            InlineKeyboardButton(
+                text=r[0],
+                callback_data=f"usersource_{subject}_{r[0]}"
+            )
+        ])
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=buttons
+    )
+
+    await callback.message.edit_text(
+        "2️⃣ Source tanlang:",
+        reply_markup=kb
+    )
+    
+@dp.callback_query(F.data.startswith("usersource_"))
+async def user_choose_practice(callback: CallbackQuery):
+
+    parts = callback.data.split("_")
+
+    subject = parts[1]
+    source = parts[2]
+
+    cursor.execute("""
+        SELECT id, practice
+        FROM section_categories
+        WHERE subject=? AND source=? AND practice!=''
+    """, (subject, source))
+
+    rows = cursor.fetchall()
+
+    buttons = []
+
+    for r in rows:
+        buttons.append([
+            InlineKeyboardButton(
+                text=r[1],
+                callback_data=f"userpractice_{r[0]}"
+            )
+        ])
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=buttons
+    )
+
+    await callback.message.edit_text(
+        "3️⃣ Practice tanlang:",
+        reply_markup=kb
+    )
+    
+@dp.callback_query(F.data.startswith("userpractice_"))
+async def user_choose_test(callback: CallbackQuery):
+
+    category_id = int(callback.data.split("_")[1])
+
+    cursor.execute("""
+        SELECT id, title
+        FROM sections
+        WHERE category_id=?
+    """, (category_id,))
+
+    rows = cursor.fetchall()
+
+    buttons = []
+
+    for r in rows:
+        buttons.append([
+            InlineKeyboardButton(
+                text=r[1],
+                callback_data=f"startsec_{r[0]}"
+            )
+        ])
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=buttons
+    )
+
+    await callback.message.edit_text(
+        "4️⃣ Test tanlang:",
+        reply_markup=kb
+    )
+    
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     finally:
-        conn.close()  
-    
+        conn.close() 
