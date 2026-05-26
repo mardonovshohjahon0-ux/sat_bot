@@ -2173,127 +2173,7 @@ async def show_help_messages(message: Message):
     await message.answer(text)
     
     
-@dp.message()
-async def collect_answers(message: Message):
 
-    user_id = message.from_user.id
-    
-    if await check_flood(user_id):
-
-        return await message.answer(
-            tr(user_id, "flood_ban")
-        )
-
-    # 🔥 TEMP BAN CHECK
-    if user_id in temp_bans:
-
-        if datetime.now() < temp_bans[user_id]:
-
-            return await message.answer(
-                tr(user_id, "temporary_block")
-            )
-
-        else:
-            del temp_bans[user_id]
-
-    # 🔥 ANTI SPAM
-    if await anti_spam(message):
-        return
-
-        
-    if user_id != ADMIN_ID:
-
-        now = time.time()
-        
-        spam_tracker[user_id].append(now)
-
-        # faqat oxirgi 8 sekund ichidagi requestlar qoladi
-        spam_tracker[user_id] = [
-            t for t in spam_tracker[user_id]
-            if now - t < 8
-        ]
-
-        # agar 8 sekund ichida 10 martadan ko‘p yozsa
-        if len(spam_tracker[user_id]) >= 8:
-                
-            temp_bans[user_id] = datetime.now() + timedelta(minutes=3)
-
-            return await message.answer(
-                tr(user_id, "spam_block_3m")
-            )
-        
-    if not message.text:
-        return
-
-    if len(message.text) > 2000:
-        return await message.answer(
-            tr(user_id, "message_too_long")
-        )
-    
-    if user_id in spam_tracker and len(spam_tracker[user_id]) == 0:
-        del spam_tracker[user_id]
-    
-    
-    if user_id not in sessions:
-        return
-
-    sec_id = sessions[user_id]["sec_id"]
-    
-    
-    lines = message.text.split("\n")
-    
-    pattern = r"^\d{1,3}\s*-\s*.+$"
-    valid_answers = 0
-
-    for line in lines:
-
-        if not re.match(pattern, line):
-            continue
-
-        valid_answers += 1
-        if not line.strip():
-            continue
-
-        try:
-            line = re.sub(r"\s+", "", line)
-
-            parts = line.split("-", 1)
-
-            q = int(parts[0])
-            ans = parts[1].upper()
-        except Exception as e:
-            logging.error(e)
-            continue
-
-    # 🔥 bor-yo‘qligini tekshiradi
-        cursor.execute("""
-            SELECT id FROM user_answers
-            WHERE user_id=? AND section_id=? AND question_number=?
-        """, (user_id, sec_id, q))
-
-        exists = cursor.fetchone()
-
-        if exists:
-            # update
-            cursor.execute(""" 
-                UPDATE user_answers
-                SET user_answer=?
-                WHERE user_id=? AND section_id=? AND question_number=?
-            """, (ans, user_id, sec_id, q))
-        else:
-            # insert
-            cursor.execute("""
-                INSERT INTO user_answers (user_id, section_id, question_number, user_answer)
-                VALUES (?, ?, ?, ?)
-                """, (user_id, sec_id, q, ans))
-
-    conn.commit()
-    
-
-    if valid_answers > 0:
-        await message.answer(
-            tr(message.from_user.id, "answers_saved_user")
-        )
 
 async def calculate_result(user_id):
     session = sessions.get(user_id)
@@ -2956,6 +2836,128 @@ async def user_choose_test(callback: CallbackQuery):
         "4️⃣ Test tanlang:",
         reply_markup=kb
     )
+    
+@dp.message()
+async def collect_answers(message: Message):
+
+    user_id = message.from_user.id
+    
+    if await check_flood(user_id):
+
+        return await message.answer(
+            tr(user_id, "flood_ban")
+        )
+
+    # 🔥 TEMP BAN CHECK
+    if user_id in temp_bans:
+
+        if datetime.now() < temp_bans[user_id]:
+
+            return await message.answer(
+                tr(user_id, "temporary_block")
+            )
+
+        else:
+            del temp_bans[user_id]
+
+    # 🔥 ANTI SPAM
+    if await anti_spam(message):
+        return
+
+        
+    if user_id != ADMIN_ID:
+
+        now = time.time()
+        
+        spam_tracker[user_id].append(now)
+
+        # faqat oxirgi 8 sekund ichidagi requestlar qoladi
+        spam_tracker[user_id] = [
+            t for t in spam_tracker[user_id]
+            if now - t < 8
+        ]
+
+        # agar 8 sekund ichida 10 martadan ko‘p yozsa
+        if len(spam_tracker[user_id]) >= 8:
+                
+            temp_bans[user_id] = datetime.now() + timedelta(minutes=3)
+
+            return await message.answer(
+                tr(user_id, "spam_block_3m")
+            )
+        
+    if not message.text:
+        return
+
+    if len(message.text) > 2000:
+        return await message.answer(
+            tr(user_id, "message_too_long")
+        )
+    
+    if user_id in spam_tracker and len(spam_tracker[user_id]) == 0:
+        del spam_tracker[user_id]
+    
+    
+    if user_id not in sessions:
+        return
+
+    sec_id = sessions[user_id]["sec_id"]
+    
+    
+    lines = message.text.split("\n")
+    
+    pattern = r"^\d{1,3}\s*-\s*.+$"
+    valid_answers = 0
+
+    for line in lines:
+
+        if not re.match(pattern, line):
+            continue
+
+        valid_answers += 1
+        if not line.strip():
+            continue
+
+        try:
+            line = re.sub(r"\s+", "", line)
+
+            parts = line.split("-", 1)
+
+            q = int(parts[0])
+            ans = parts[1].upper()
+        except Exception as e:
+            logging.error(e)
+            continue
+
+    # 🔥 bor-yo‘qligini tekshiradi
+        cursor.execute("""
+            SELECT id FROM user_answers
+            WHERE user_id=? AND section_id=? AND question_number=?
+        """, (user_id, sec_id, q))
+
+        exists = cursor.fetchone()
+
+        if exists:
+            # update
+            cursor.execute(""" 
+                UPDATE user_answers
+                SET user_answer=?
+                WHERE user_id=? AND section_id=? AND question_number=?
+            """, (ans, user_id, sec_id, q))
+        else:
+            # insert
+            cursor.execute("""
+                INSERT INTO user_answers (user_id, section_id, question_number, user_answer)
+                VALUES (?, ?, ?, ?)
+                """, (user_id, sec_id, q, ans))
+
+    conn.commit()
+    
+
+    if valid_answers > 0:
+        await message.answer(
+            tr(message.from_user.id, "answers_saved_user")
+        )
     
 if __name__ == "__main__":
     try:
