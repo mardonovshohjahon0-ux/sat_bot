@@ -1174,29 +1174,149 @@ async def edit_section(message: Message):
         reply_markup=kb
     )
 
+class UploadSelect(StatesGroup):
+    subject = State()
+    source = State()
+    practice = State()
+    test = State()
+
 @dp.message(is_menu_text("upload_file"))
 async def upload_file_start(message: Message):
 
-    cursor.execute("SELECT id, title FROM sections")
-    secs = cursor.fetchall()
-
-    if not secs:
-        return await message.answer(
-            tr_admin("no_sections")
-        )
-
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=s[1], callback_data=f"uploadfile_{s[0]}")]
-            for s in secs
+            [
+                InlineKeyboardButton(
+                    text="English",
+                    callback_data="uploadsub_english"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Math",
+                    callback_data="uploadsub_math"
+                )
+            ]
         ]
     )
-    if message.from_user.id != ADMIN_ID:
-        return
+
     await message.answer(
-        tr_admin("file_upload_choose"),
+        "Subject tanlang:",
         reply_markup=kb
     )
+
+@dp.callback_query(F.data.startswith("uploadsub_"))
+async def upload_choose_source(callback: CallbackQuery):
+
+    subject = callback.data.split("_")[1]
+
+    cursor.execute("""
+        SELECT DISTINCT source
+        FROM section_categories
+        WHERE subject=?
+    """, (subject,))
+
+    rows = cursor.fetchall()
+
+    buttons = []
+
+    for r in rows:
+        buttons.append([
+            InlineKeyboardButton(
+                text=r[0],
+                callback_data=f"uploadsource_{subject}_{r[0]}"
+            )
+        ])
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=buttons
+    )
+
+    await callback.message.edit_text(
+        "Source tanlang:",
+        reply_markup=kb
+    )
+    
+@dp.callback_query(F.data.startswith("uploadsource_"))
+async def upload_choose_practice(callback: CallbackQuery):
+
+    subject = callback.data.split("_")[1]
+    source = callback.data.split("_", 2)[2]
+
+    cursor.execute("""
+        SELECT id, practice
+        FROM section_categories
+        WHERE subject=? AND source=? AND practice!=''
+    """, (subject, source))
+
+    rows = cursor.fetchall()
+
+    buttons = []
+
+    for r in rows:
+        buttons.append([
+            InlineKeyboardButton(
+                text=r[1],
+                callback_data=f"uploadpractice_{r[0]}"
+            )
+        ])
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=buttons
+    )
+
+    await callback.message.edit_text(
+        "Practice tanlang:",
+        reply_markup=kb
+    )
+    
+@dp.callback_query(F.data.startswith("uploadpractice_"))
+async def upload_choose_test(callback: CallbackQuery):
+
+    category_id = int(callback.data.split("_")[1])
+
+    cursor.execute("""
+        SELECT id, title
+        FROM sections
+        WHERE category_id=?
+    """ , (category_id,))
+
+    rows = cursor.fetchall()
+
+    buttons = []
+
+    for r in rows:
+        buttons.append([
+            InlineKeyboardButton(
+                text=r[1],
+                callback_data=f"uploadtest_{r[0]}"
+            )
+        ])
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=buttons
+    )
+
+    await callback.message.edit_text(
+        "Test tanlang:",
+        reply_markup=kb
+    )
+    
+@dp.callback_query(F.data.startswith("uploadtest_"))
+async def upload_test_selected(
+    callback: CallbackQuery,
+    state: FSMContext
+):
+
+    sec_id = int(callback.data.split("_")[1])
+
+    await state.update_data(sec_id=sec_id)
+
+    await callback.message.answer(
+        "File yuboring"
+    )
+
+    await state.set_state(UploadFile.waiting_file)
 
 
 @dp.callback_query(F.data.startswith("editsec_"))
@@ -2496,7 +2616,7 @@ async def choose_practice_category(
     await state.update_data(category_id=cat_id)
 
     await callback.message.answer(
-        tr(user_id, "enter_practice_name")
+        tr(callback.from_user.id, "enter_practice_name")
     )
 
     await state.set_state(AddPractice.practice)
@@ -2527,7 +2647,7 @@ async def save_practice(message: Message, state: FSMContext):
     conn.commit()
 
     await message.answer(
-        tr(user_id, "practice_added")
+        tr(message.from_user.id, "practice_added")
     )
 
     await state.clear()
@@ -2775,8 +2895,8 @@ async def user_choose_practice(callback: CallbackQuery):
 
     parts = callback.data.split("_")
 
-    subject = parts[1]
-    source = parts[2]
+    subject = callback.data.split("_")[1]
+    source = callback.data.split("_", 2)[2]
 
     cursor.execute("""
         SELECT id, practice
