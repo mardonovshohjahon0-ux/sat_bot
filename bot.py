@@ -2273,7 +2273,28 @@ async def receive_answers(message: Message, state: FSMContext):
             continue
 
         try:
-            parts = line.split("-")
+            import re
+
+            match = re.match(
+                r"^(\d+)-\((.+)\)-(\d+)$",
+                line.strip()
+            )
+
+            if not match:
+                continue
+
+            q = int(match.group(1))
+
+            answers_raw = match.group(2)
+
+            score = int(match.group(3))
+
+            answers = [
+                a.strip().lower()
+                for a in answers_raw.split(",")
+            ]
+
+            correct_answer = "|".join(answers)
 
             if len(parts) < 2:
                 continue
@@ -2649,7 +2670,10 @@ async def calculate_result(user_id):
             continue
 
         user_ans = res[0].replace(" ", "").lower()
-        correct_list = [a.replace(" ", "").lower() for a in correct_ans.split("or")]
+        correct_list = [
+            a.strip().replace(" ", "").lower()
+            for a in correct_ans.split("|")
+        ]
 
         if user_ans in correct_list:
             result_text += f"{q_num} ✅\n"
