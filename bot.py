@@ -803,6 +803,11 @@ class EditMenu(StatesGroup):
     
 class EditItem(StatesGroup):
     rename = State()
+    
+class AddSection(StatesGroup):
+    title = State()
+    time = State()
+    mode = State()
 
 
 # ---------------- START ----------------
