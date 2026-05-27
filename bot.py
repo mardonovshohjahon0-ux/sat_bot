@@ -305,7 +305,7 @@ temp = {}
 # ---------------- MENUS ----------------
 LANGS = {
     "uz": {
-        "choose_1_2": "1 yoki 2 yuboring"
+        "choose_1_2": "1 yoki 2 yuboring",
         "welcome": "Xush kelibsiz!",
         "choose_lang": "Tilni tanlang:",
         "enter_name": "Ismingizni kiriting:",
@@ -448,7 +448,7 @@ LANGS = {
     },
 
     "ru": {
-        "choose_1_2": "Отправьте 1 или 2"
+        "choose_1_2": "Отправьте 1 или 2",
         "welcome": "Добро пожаловать!",
         "choose_lang": "Выберите язык:",
         "enter_name": "Введите имя:",
@@ -591,7 +591,7 @@ LANGS = {
     },
 
     "en": {
-        "choose_1_2": "Send 1 or 2"
+        "choose_1_2": "Send 1 or 2",
         "welcome": "Welcome!",
         "choose_lang": "Choose language:",
         "enter_name": "Enter your name:",
