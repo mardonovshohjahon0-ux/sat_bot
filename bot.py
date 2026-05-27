@@ -2908,10 +2908,10 @@ async def add_practice_start(message: Message):
         inline_keyboard=buttons
     )
 
-    await callback.message.edit_text(
-        tr(callback.from_user.id, "choose_source"),
+    await message.answer(
+        tr(message.from_user.id, "choose_source"),
         reply_markup=kb
-    )
+    )   
 
 @dp.callback_query(F.data.startswith("practicecat_"))
 async def choose_practice_category(
