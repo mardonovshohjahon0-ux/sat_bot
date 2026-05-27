@@ -1522,6 +1522,135 @@ async def practice_actions(callback: CallbackQuery):
         reply_markup=kb
     )
     
+    
+@dp.callback_query(F.data == "edit_test")
+async def edit_test(callback: CallbackQuery):
+
+    cursor.execute("""
+        SELECT DISTINCT source
+        FROM section_categories
+    """)
+
+    rows = cursor.fetchall()
+
+    buttons = []
+
+    for r in rows:
+        buttons.append([
+            InlineKeyboardButton(
+                text=r[0],
+                callback_data=f"test_source_{r[0]}"
+            )
+        ])
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=buttons
+    )
+
+    await callback.message.edit_text(
+        tr(callback.from_user.id, "choose_source"),
+        reply_markup=kb
+    )
+    
+@dp.callback_query(F.data.startswith("test_source_"))
+async def test_practice_list(callback: CallbackQuery):
+
+    source = callback.data.split("_", 2)[2]
+
+    cursor.execute("""
+        SELECT id, practice
+        FROM section_categories
+        WHERE source=? AND practice!=''
+    """, (source,))
+
+    rows = cursor.fetchall()
+
+    buttons = []
+
+    for r in rows:
+        buttons.append([
+            InlineKeyboardButton(
+                text=r[1],
+                callback_data=f"test_practice_{r[0]}"
+            )
+        ])
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=buttons
+    )
+
+    await callback.message.edit_text(
+        tr(callback.from_user.id, "choose_practice"),
+        reply_markup=kb
+    )
+    
+@dp.callback_query(F.data.startswith("test_practice_"))
+async def test_list(callback: CallbackQuery):
+
+    cat_id = int(callback.data.split("_")[2])
+
+    cursor.execute("""
+        SELECT id, title
+        FROM sections
+        WHERE category_id=?
+    """, (cat_id,))
+
+    rows = cursor.fetchall()
+
+    buttons = []
+
+    for r in rows:
+        buttons.append([
+            InlineKeyboardButton(
+                text=r[1],
+                callback_data=f"testedit_{r[0]}"
+            )
+        ])
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=buttons
+    )
+
+    await callback.message.edit_text(
+        tr(callback.from_user.id, "choose_test"),
+        reply_markup=kb
+    )
+    
+@dp.callback_query(F.data.startswith("testedit_"))
+async def test_actions(callback: CallbackQuery):
+
+    sec_id = int(callback.data.split("_")[1])
+
+    temp[callback.from_user.id] = {
+        "edit_type": "test",
+        "section_id": sec_id
+    }
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=tr_admin("rename"),
+                    callback_data="rename_item"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=tr_admin("delete_section"),
+                    callback_data="delete_item"
+                )
+            ]
+        ]
+    )
+
+    await callback.message.edit_text(
+        tr(callback.from_user.id, "choose"),
+        reply_markup=kb
+    )
+    
+
+
+
 @dp.callback_query(F.data == "delete_item")
 async def delete_item(callback: CallbackQuery):
 
@@ -1610,8 +1739,37 @@ async def delete_item(callback: CallbackQuery):
             DELETE FROM section_categories
             WHERE id=?
         """, (cat_id,))
+    elif edit_type == "test":
 
+        sec_id = data["section_id"]
+        
+        cursor.execute("""
+            DELETE FROM results
+            WHERE section_id=?
+        """, (sec_id,))
+
+        cursor.execute("""
+            DELETE FROM user_answers
+            WHERE section_id=?
+        """, (sec_id,))
+
+        cursor.execute("""
+            DELETE FROM section_answers
+            WHERE section_id=?
+        """, (sec_id,))
+
+        cursor.execute("""
+            DELETE FROM questions
+            WHERE section_id=?
+        """, (sec_id,))
+
+        cursor.execute("""
+            DELETE FROM sections
+            WHERE id=?
+        """, (sec_id,))
     conn.commit()
+    
+    
 
     await callback.message.answer(
         tr_admin("deleted")
@@ -1658,7 +1816,16 @@ async def save_rename(message: Message, state: FSMContext):
             message.text,
             data["category_id"]
         ))
+    elif edit_type == "test":
 
+        cursor.execute("""
+            UPDATE sections
+            SET title=?
+            WHERE id=?
+        """, (
+            message.text,
+            data["section_id"]
+        ))
     conn.commit()
 
     await message.answer(
