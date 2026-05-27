@@ -1215,7 +1215,7 @@ async def upload_file_start(message: Message):
     )
 
     await message.answer(
-        "Subject tanlang:",
+        tr(message.from_user.id, "choose_subject"),
         reply_markup=kb
     )
 
@@ -1247,9 +1247,9 @@ async def upload_choose_source(callback: CallbackQuery):
     )
 
     await callback.message.edit_text(
-        "Source tanlang:",
+        tr(callback.from_user.id, "choose_source"),
         reply_markup=kb
-    )
+    )       
     
 @dp.callback_query(F.data.startswith("uploadsource_"))
 async def upload_choose_practice(callback: CallbackQuery):
@@ -1280,7 +1280,7 @@ async def upload_choose_practice(callback: CallbackQuery):
     )
 
     await callback.message.edit_text(
-        "Practice tanlang:",
+        tr(callback.from_user.id, "choose_practice"),
         reply_markup=kb
     )
     
@@ -1312,7 +1312,7 @@ async def upload_choose_test(callback: CallbackQuery):
     )
 
     await callback.message.edit_text(
-        "Test tanlang:",
+        tr(callback.from_user.id, "choose_test"),
         reply_markup=kb
     )
     
@@ -1327,7 +1327,7 @@ async def upload_test_selected(
     await state.update_data(sec_id=sec_id)
 
     await callback.message.answer(
-        "File yuboring"
+        tr(callback.from_user.id, "send_file_text")
     )
 
     await state.set_state(UploadFile.waiting_file)
@@ -2247,81 +2247,84 @@ async def receive_file(message: Message, state: FSMContext):
     
 @dp.message(UploadFile.waiting_answers)
 async def receive_answers(message: Message, state: FSMContext):
+
     data = await state.get_data()
     sec_id = data.get("sec_id")
-    
+
     if not sec_id:
         return await message.answer(
             tr(message.from_user.id, "section_missing")
         )
 
-    # eski javoblarni tozalaymiz
-    cursor.execute("DELETE FROM section_answers WHERE section_id=?", (sec_id,))
+    cursor.execute("""
+        DELETE FROM section_answers
+        WHERE section_id=?
+    """, (sec_id,))
 
     lines = message.text.split("\n")
 
-    for line in lines:
-        if line.count("-") < 2:
-            continue
+    saved = 0
 
-        if not line.strip():
+    for line in lines:
+
+        line = line.strip()
+
+        if not line:
             continue
 
         line = re.sub(r"\s+", "", line)
 
-        if "-" not in line:
-            continue
-
         try:
-            import re
-
             match = re.match(
                 r"^(\d+)-\((.+)\)-(\d+)$",
-                line.strip()
+                line
             )
 
             if not match:
                 continue
 
-            q = int(match.group(1))
+            q_num = int(match.group(1))
 
             answers_raw = match.group(2)
 
             score = int(match.group(3))
 
-            answers = [
-                a.strip().lower()
-                for a in answers_raw.split(",")
-            ]
+            answers = []
+
+            for a in answers_raw.split(","):
+
+                a = a.strip().lower()
+
+                if a:
+                    answers.append(a)
 
             correct_answer = "|".join(answers)
 
-            if len(parts) < 2:
-                continue
+            cursor.execute("""
+                INSERT INTO section_answers
+                (
+                    section_id,
+                    question_number,
+                    correct_answer,
+                    score
+                )
+                VALUES (?, ?, ?, ?)
+            """, (
+                sec_id,
+                q_num,
+                correct_answer,
+                score
+            ))
 
-            q = int(parts[0])
-            if q < 1 or q > 200:
-                continue
-
-            # oxirgi qism = ball
-            score = int(parts[-1])
-
-            # o‘rtadagi qism = javob
-            ans = "-".join(parts[1:-1]).upper()
+            saved += 1
 
         except Exception as e:
             logging.error(e)
 
-        cursor.execute("""
-            INSERT INTO section_answers
-            (section_id, question_number, correct_answer, score)
-            VALUES (?, ?, ?, ?)
-        """, (sec_id, q, ans, score))
-
-       
     conn.commit()
+
     await message.answer(
-        tr_admin("answers_saved")
+        f"{tr_admin('answers_saved')} ({saved})"
     )
 
     await state.clear()
@@ -2645,7 +2648,6 @@ async def calculate_result(user_id):
         WHERE section_id=?
         ORDER BY question_number ASC
     """, (sec_id,), fetchall=True)
-    corrects = cursor.fetchall()
 
     result_text = ""
     correct = 0
@@ -2904,8 +2906,8 @@ async def add_practice_start(message: Message):
         inline_keyboard=buttons
     )
 
-    await message.answer(
-        "Source tanlang:",
+    await callback.message.edit_text(
+        tr(callback.from_user.id, "choose_source"),
         reply_markup=kb
     )
 
@@ -3158,7 +3160,7 @@ async def choose_subject(message: Message):
     )
 
     await message.answer(
-        "1️⃣ Subject tanlang:",
+        tr(message.from_user.id, "step_subject"),
         reply_markup=kb
     )
     
@@ -3190,9 +3192,9 @@ async def user_choose_source(callback: CallbackQuery):
     )
 
     await callback.message.edit_text(
-        "2️⃣ Source tanlang:",
+        tr(callback.from_user.id, "step_source"),
         reply_markup=kb
-    )
+    )   
     
 @dp.callback_query(F.data.startswith("usersource_"))
 async def user_choose_practice(callback: CallbackQuery):
@@ -3225,7 +3227,7 @@ async def user_choose_practice(callback: CallbackQuery):
     )
 
     await callback.message.edit_text(
-        "3️⃣ Practice tanlang:",
+        tr(callback.from_user.id, "choose_practice"),
         reply_markup=kb
     )
     
@@ -3257,9 +3259,9 @@ async def user_choose_test(callback: CallbackQuery):
     )
 
     await callback.message.edit_text(
-        "4️⃣ Test tanlang:",
+        tr(callback.from_user.id, "step_test"),
         reply_markup=kb
-    )
+    )   
     
 @dp.message()
 async def collect_answers(message: Message):
@@ -3348,7 +3350,7 @@ async def collect_answers(message: Message):
             parts = line.split("-", 1)
 
             q = int(parts[0])
-            ans = parts[1].upper()
+            ans = parts[1].strip().lower()
         except Exception as e:
             logging.error(e)
             continue
