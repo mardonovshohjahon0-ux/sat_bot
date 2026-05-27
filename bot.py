@@ -436,6 +436,13 @@ LANGS = {
         "no_practices": "❗ Practicelar topilmadi",
         "no_tests": "❗ Testlar topilmadi",
         "no_sources": "❗ Sourcelar topilmadi",
+        "edit_menu": "✏️ Tahrirlash",
+        "edit_source": "📚 Source tahrirlash",
+        "edit_practice": "📝 Practice tahrirlash",
+        "edit_test": "📄 Test tahrirlash",
+        "choose_source": "Source tanlang",
+        "choose_practice": "Practice tanlang",
+        "choose_test": "Test tanlang",
                 
     },
 
@@ -565,12 +572,19 @@ LANGS = {
         "step_practice": "3️⃣ Выберите practice:",
         "step_test": "4️⃣ Выберите тест:",
 
-    "english_subject": "English",
-    "math_subject": "Math",
-
-    "no_practices": "❗ Practices не найдены",
-    "no_tests": "❗ Тесты не найдены",
-    "no_sources": "❗ Sources не найдены",
+        "english_subject": "English",
+        "math_subject": "Math",
+        
+        "no_practices": "❗ Practices не найдены",
+        "no_tests": "❗ Тесты не найдены",
+        "no_sources": "❗ Sources не найдены",
+        "edit_menu": "✏️ Редактировать",
+        "edit_source": "📚 Редактировать источник",
+        "edit_practice": "📝 Практика редактирования",
+        "edit_test": "📄 Тест редактирования",
+        "choose_source": "Выбрать источник",
+        "choose_practice": "Выбрать практику",
+        "choose_test": "Выбрать тест",
             
     },
 
@@ -700,12 +714,19 @@ LANGS = {
         "step_practice": "3️⃣ Choose practice:",
         "step_test": "4️⃣ Choose test:",
 
-    "english_subject": "English",
-    "math_subject": "Math",
-    
-    "no_practices": "❗ No practices found",
-    "no_tests": "❗ No tests found",
-    "no_sources": "❗ No sources found",
+        "english_subject": "English",
+        "math_subject": "Math",
+        
+        "no_practices": "❗ No practices found",
+        "no_tests": "❗ No tests found",
+        "no_sources": "❗ No sources found",
+        "edit_menu": "✏️ Edit",
+        "edit_source": "📚 Edit source",
+        "edit_practice": "📝 Edit practice",
+        "edit_test": "📄 Edit test",
+        "choose_source":"Choose Source",
+        "choose_practice": "Choose Practice",
+        "choose_test": "Choose Test",
     }
 }
 def get_main_menu(user_id):
@@ -728,7 +749,7 @@ def get_admin_menu():
             [KeyboardButton(text=tr_admin("add_source"))],
             [KeyboardButton(text=tr_admin("add_practice"))],
             [KeyboardButton(text=tr_admin("add_test"))],
-            [KeyboardButton(text=tr_admin("edit_section"))],
+            [KeyboardButton(text=tr_admin("edit_menu"))],
             [KeyboardButton(text=tr_admin("upload_file"))],
             [KeyboardButton(text=tr_admin("users"))],
             [KeyboardButton(text=tr_admin("leaderboard"))],
@@ -749,11 +770,6 @@ class UploadFile(StatesGroup):
 class Register(StatesGroup):
     name = State()
     age = State()
-
-class AddSection(StatesGroup):
-    title = State()
-    time = State()
-    mode = State()
 
 class AddSource(StatesGroup):
     subject = State()
@@ -776,6 +792,17 @@ class RenameSection(StatesGroup):
 
 class HelpState(StatesGroup):
     waiting_message = State()
+    
+class EditMenu(StatesGroup):
+    source = State()
+    practice_source = State()
+    practice = State()
+    test_source = State()
+    test_practice = State()
+    test = State()
+    
+class EditItem(StatesGroup):
+    rename = State()
 
 
 # ---------------- START ----------------
@@ -1083,6 +1110,10 @@ async def reg_name(message: Message, state: FSMContext):
 
 @dp.message(Register.age)
 async def reg_age(message: Message, state: FSMContext):
+    if not message.text.isdigit():
+        return await message.answer(
+            tr(message.from_user.id, "numbers_only")
+        )
     data = await state.get_data()
 
     username = message.from_user.username or "-"
@@ -1109,14 +1140,6 @@ async def reg_age(message: Message, state: FSMContext):
 # ---------------- ADD SECTION ----------------
 
 
-@dp.message(is_menu_text("add_section"))
-async def add_section(message: Message, state: FSMContext):
-    if message.from_user.id != ADMIN_ID:
-        return
-    await message.answer(
-        tr(message.from_user.id, "section_name")
-    )
-    await state.set_state(AddSection.title)
 
 @dp.message(AddSection.title)
 async def sec_title(message: Message, state: FSMContext):
@@ -1158,21 +1181,7 @@ async def sec_mode(message: Message, state: FSMContext):
     await state.clear()
 
 # ---------------- EDIT SECTION ----------------
-@dp.message(is_menu_text("edit_section"))
-async def edit_section(message: Message):
-    cursor.execute("SELECT * FROM sections")
-    secs = cursor.fetchall()
 
-    kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text=s[1], callback_data=f"editsec_{s[0]}")]
-            for s in secs
-        ]
-    )
-    await message.answer(
-        tr_admin("choose"),
-        reply_markup=kb
-    )
 
 class UploadSelect(StatesGroup):
     subject = State()
@@ -1319,107 +1328,344 @@ async def upload_test_selected(
     await state.set_state(UploadFile.waiting_file)
 
 
-@dp.callback_query(F.data.startswith("editsec_"))
-async def choose_edit(callback: CallbackQuery):
-    user_id = callback.from_user.id
 
-    if await check_flood(user_id):
 
-        return await callback.answer(
-            tr(user_id, "flood_callback"),
-            show_alert=True
-        )
-
-    await callback.answer()
-    
-    temp.setdefault(callback.from_user.id, {})
-    temp[callback.from_user.id]["edit_sec"] = int(callback.data.split("_")[1])
+# ---------------- ADD QUESTION ----------------
+@dp.message(is_menu_text("edit_menu"))
+async def edit_menu(message: Message):
 
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(
-                text=tr_admin("rename"), 
-                callback_data="rename")],
-            [InlineKeyboardButton(
-                text=tr_admin("delete_section"), 
-                callback_data="delete")]
+            [
+                InlineKeyboardButton(
+                    text=tr(message.from_user.id, "edit_source"),
+                    callback_data="edit_source"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=tr(message.from_user.id, "edit_practice"),
+                    callback_data="edit_practice"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=tr(message.from_user.id, "edit_test"),
+                    callback_data="edit_test"
+                )
+            ]
         ]
     )
+
+    await message.answer(
+        tr(message.from_user.id, "choose"),
+        reply_markup=kb
+    )
+
+
+@dp.callback_query(F.data == "edit_source")
+async def edit_source(callback: CallbackQuery):
+
+    cursor.execute("""
+        SELECT DISTINCT source
+        FROM section_categories
+    """)
+
+    rows = cursor.fetchall()
+
+    buttons = []
+
+    for r in rows:
+        buttons.append([
+            InlineKeyboardButton(
+                text=r[0],
+                callback_data=f"sourceedit_{r[0]}"
+            )
+        ])
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=buttons
+    )
+
+    await callback.message.edit_text(
+        tr(callback.from_user.id, "choose_source"),
+        reply_markup=kb
+    )
     
-    if callback.from_user.id != ADMIN_ID:
-        return
+@dp.callback_query(F.data.startswith("sourceedit_"))
+async def source_actions(callback: CallbackQuery):
+
+    source = callback.data.split("_", 1)[1]
+
+    temp[callback.from_user.id] = {
+        "edit_type": "source",
+        "source": source
+    }
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=tr_admin("rename"),
+                    callback_data="rename_item"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=tr_admin("delete_section"),
+                    callback_data="delete_item"
+                )
+            ]
+        ]
+    )
+
+    await callback.message.edit_text(
+        source,
+        reply_markup=kb
+    )
+    
+@dp.callback_query(F.data == "edit_practice")
+async def edit_practice(callback: CallbackQuery):
+
+    cursor.execute("""
+        SELECT DISTINCT source
+        FROM section_categories
+    """)
+
+    rows = cursor.fetchall()
+
+    buttons = []
+
+    for r in rows:
+        buttons.append([
+            InlineKeyboardButton(
+                text=r[0],
+                callback_data=f"practice_source_{r[0]}"
+            )
+        ])
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=buttons
+    )
+
+    await callback.message.edit_text(
+        tr(callback.from_user.id, "choose_source"),
+        reply_markup=kb
+    )
+    
+@dp.callback_query(F.data.startswith("practice_source_"))
+async def practice_list(callback: CallbackQuery):
+
+    source = callback.data.split("_", 2)[2]
+
+    cursor.execute("""
+        SELECT id, practice
+        FROM section_categories
+        WHERE source=? AND practice!=''
+    """, (source,))
+
+    rows = cursor.fetchall()
+
+    buttons = []
+
+    for r in rows:
+        buttons.append([
+            InlineKeyboardButton(
+                text=r[1],
+                callback_data=f"practiceedit_{r[0]}"
+            )
+        ])
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=buttons
+    )
+
+    await callback.message.edit_text(
+        tr(callback.from_user.id, "choose_practice"),
+        reply_markup=kb
+    )
+    
+@dp.callback_query(F.data.startswith("practiceedit_"))
+async def practice_actions(callback: CallbackQuery):
+
+    cat_id = int(callback.data.split("_")[1])
+
+    temp[callback.from_user.id] = {
+        "edit_type": "practice",
+        "category_id": cat_id
+    }
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text=tr_admin("rename"),
+                    callback_data="rename_item"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text=tr_admin("delete_section"),
+                    callback_data="delete_item"
+                )
+            ]
+        ]
+    )
+
     await callback.message.edit_text(
         tr(callback.from_user.id, "choose"),
         reply_markup=kb
     )
-@dp.callback_query(F.data == "delete")
-async def delete_sec(callback: CallbackQuery):
-    user_id = callback.from_user.id
-
-    if await check_flood(user_id):
-
-        return await callback.answer(
-            tr(user_id, "flood_callback"),
-            show_alert=True
-        )
-
-    await callback.answer()
-    if callback.from_user.id != ADMIN_ID:
-        return
-    sec = temp[callback.from_user.id]["edit_sec"]
-    cursor.execute("DELETE FROM sections WHERE id=?", (sec,))
-    cursor.execute("DELETE FROM questions WHERE section_id=?", (sec,))
-    cursor.execute("DELETE FROM results WHERE section_id=?", (sec,))
-    cursor.execute("DELETE FROM section_answers WHERE section_id=?", (sec,))
-    cursor.execute("DELETE FROM user_answers WHERE section_id=?", (sec,))
-    conn.commit()
     
+@dp.callback_query(F.data == "delete_item")
+async def delete_item(callback: CallbackQuery):
+
+    data = temp[callback.from_user.id]
+
+    edit_type = data["edit_type"]
+
+    # SOURCE DELETE
+    if edit_type == "source":
+
+        source = data["source"]
+
+        cursor.execute("""
+            SELECT id
+            FROM section_categories
+            WHERE source=?
+        """, (source,))
+
+        cats = cursor.fetchall()
+
+        for c in cats:
+
+            cat_id = c[0]
+
+            cursor.execute("""
+                DELETE FROM section_answers
+                WHERE section_id IN (
+                    SELECT id FROM sections
+                    WHERE category_id=?
+                )
+            """, (cat_id,))
+            
+            cursor.execute("""
+                DELETE FROM results
+                WHERE section_id IN (
+                    SELECT id FROM sections
+                    WHERE category_id=?
+                )
+            """, (cat_id,))
+            
+            cursor.execute("""
+                DELETE FROM user_answers
+                WHERE section_id IN (
+                    SELECT id FROM sections
+                    WHERE category_id=?
+                )
+            """, (cat_id,))
+            
+            cursor.execute("""
+                DELETE FROM sections
+                WHERE category_id=?
+            """, (cat_id,))
+
+        cursor.execute("""
+            DELETE FROM section_categories
+            WHERE source=?
+        """, (source,))
+
+    # PRACTICE DELETE
+    elif edit_type == "practice":
+
+        cat_id = data["category_id"]
+        
+        cursor.execute("""
+            DELETE FROM results
+            WHERE section_id IN (
+                SELECT id FROM sections
+                WHERE category_id=?
+            )
+        """, (cat_id,))
+        
+        cursor.execute("""
+            DELETE FROM user_answers
+            WHERE section_id IN (
+                SELECT id FROM sections
+                WHERE category_id=?
+            )
+        """, (cat_id,))
+
+        cursor.execute("""
+            DELETE FROM sections
+            WHERE category_id=?
+        """, (cat_id,))
+
+        cursor.execute("""
+            DELETE FROM section_categories
+            WHERE id=?
+        """, (cat_id,))
+
+    conn.commit()
+
     await callback.message.answer(
         tr_admin("deleted")
     )
     
+    temp.pop(callback.from_user.id, None)
     
+@dp.callback_query(F.data == "rename_item")
+async def rename_item(callback: CallbackQuery, state: FSMContext):
 
-@dp.callback_query(F.data == "rename")
-async def rename_start(callback: CallbackQuery, state: FSMContext):
-    user_id = callback.from_user.id
-
-    if await check_flood(user_id):
-
-        return await callback.answer(
-            tr(user_id, "flood_callback"),
-            show_alert=True
-        )
-
-    await callback.answer()
-    if callback.from_user.id != ADMIN_ID:
-        return
     await callback.message.answer(
         tr(callback.from_user.id, "new_name")
     )
-    await state.set_state(RenameSection.new_name)
-    
 
-@dp.message(RenameSection.new_name)
-async def rename_save(message: Message, state: FSMContext):
-    cursor.execute(
-        "UPDATE sections SET title=? WHERE id=?",
-        (message.text, temp[message.from_user.id]["edit_sec"])
-    )
+    await state.set_state(EditItem.rename)
+    
+@dp.message(EditItem.rename)
+async def save_rename(message: Message, state: FSMContext):
+
+    data = temp[message.from_user.id]
+
+    edit_type = data["edit_type"]
+
+    # SOURCE
+    if edit_type == "source":
+
+        cursor.execute("""
+            UPDATE section_categories
+            SET source=?
+            WHERE source=?
+        """, (
+            message.text,
+            data["source"]
+        ))
+
+    # PRACTICE
+    elif edit_type == "practice":
+
+        cursor.execute("""
+            UPDATE section_categories
+            SET practice=?
+            WHERE id=?
+        """, (
+            message.text,
+            data["category_id"]
+        ))
+
     conn.commit()
+
     await message.answer(
         tr_admin("changed")
     )
+
     await state.clear()
-
-
-
-# ---------------- ADD QUESTION ----------------
-
-
     
+    temp.pop(message.from_user.id, None)
 
 # ---------------- PROFILE ----------------
+
 class EditProfile(StatesGroup):
     name = State()
     age = State()
@@ -1555,6 +1801,10 @@ async def edit_age_start(callback: CallbackQuery, state: FSMContext):
 
 @dp.message(EditProfile.age)
 async def save_new_age(message: Message, state: FSMContext):
+    if not message.text.isdigit():
+        return await message.answer(
+            tr(message.from_user.id, "numbers_only")
+        )
     cursor.execute(
         "UPDATE users SET age=? WHERE user_id=?",
         (message.text, message.from_user.id)
@@ -1737,9 +1987,18 @@ async def start_real_test(callback, user_id, sec_id, time_limit):
 @dp.message(is_menu_text("results"))
 async def my_results(message: Message):
     cursor.execute("""
-        SELECT s.title, r.correct, r.wrong, r.score, r.created_at
+        SELECT
+            s.title,
+            sc.source,
+            sc.practice,
+            r.correct,
+            r.wrong,
+            r.score,
+            r.created_at
         FROM results r
         JOIN sections s ON s.id = r.section_id
+        LEFT JOIN section_categories sc
+        ON sc.id = s.category_id
         WHERE r.user_id=?
         ORDER BY r.id DESC
     """, (message.from_user.id,))
@@ -1756,8 +2015,10 @@ async def my_results(message: Message):
     for r in results:
         text += (
             f"📚 {r[0]}\n"
-            f"✔ {r[1]} | ❌ {r[2]} | 🏆 {r[3]}\n"
-            f"📅 {r[4]}\n\n"
+            f"📂 {r[1]}\n"
+            f"📝 {r[2]}\n"
+            f"✔ {r[3]} | ❌ {r[4]} | 🏆 {r[5]}\n"
+            f"📅 {r[6]}\n\n"
         )
 
     await message.answer(text)
@@ -1846,6 +2107,8 @@ async def receive_answers(message: Message, state: FSMContext):
                 continue
 
             q = int(parts[0])
+            if q < 1 or q > 200:
+                continue
 
             # oxirgi qism = ball
             score = int(parts[-1])
@@ -2183,12 +2446,12 @@ async def calculate_result(user_id):
 
     sec_id = session["sec_id"]
 
-    cursor.execute("""
+    corrects = await db_execute("""
         SELECT question_number, correct_answer, score
         FROM section_answers
         WHERE section_id=?
         ORDER BY question_number ASC
-    """, (sec_id,))
+    """, (sec_id,), fetchall=True)
     corrects = cursor.fetchall()
 
     result_text = ""
@@ -2198,12 +2461,15 @@ async def calculate_result(user_id):
 
     for q_num, correct_ans, pts in corrects:
 
-        cursor.execute("""
-            SELECT user_answer FROM user_answers
+        res = await db_execute("""
+            SELECT user_answer
+            FROM user_answers
             WHERE user_id=? AND section_id=? AND question_number=?
-        """, (user_id, sec_id, q_num))
-
-        res = cursor.fetchone()
+        """, (
+            user_id,
+            sec_id,
+            q_num
+        ), fetchone=True)
 
         # 🔥 BU YERNI HAM TUZATAMIZ (multi answer uchun)
         if not res:
@@ -2235,7 +2501,15 @@ async def calculate_result(user_id):
         datetime.now().strftime("%Y-%m-%d %H:%M")
     ), commit=True)
     
+    await db_execute("""
+        DELETE FROM user_answers
+        WHERE user_id=? AND section_id=?
+    """, (
+        user_id,
+        sec_id
+    ), commit=True)
 
+    conn.commit()
     sessions.pop(user_id, None)
 
     try:
@@ -2284,62 +2558,13 @@ async def finish_test(callback: CallbackQuery):
         sec_id = session["sec_id"]
 
     # 🔹 barcha to‘g‘ri javoblarni olamiz
-        cursor.execute("""
-            SELECT question_number, correct_answer, score
-            FROM section_answers
-            WHERE section_id=?
-            ORDER BY question_number ASC
-        """, (sec_id,))
-        corrects = cursor.fetchall()
+        result = await calculate_result(user_id)
 
-        correct = 0
-        wrong = 0
-        total_score = 0
-        result_text = ""
-
-        for q_num, correct_ans, pts in corrects:
-
-            # 🔹 user javobini olamiz
-            cursor.execute("""
-                SELECT user_answer FROM user_answers
-                WHERE user_id=? AND section_id=? AND question_number=?
-            """, (user_id, sec_id, q_num))
-
-            res = cursor.fetchone()
-
-            if res:
-                user_ans = res[0].replace(" ", "").lower()
-                correct_list = [a.replace(" ", "").lower() for a in correct_ans.split("or")]
-
-                if user_ans in correct_list:
-                    result_text += f"{q_num} ✅\n"
-                    correct += 1
-                    total_score += pts
-                else:
-                    result_text += f"{q_num} ❌ ({user_ans})\n"
-                    wrong += 1
-            else:
-                result_text += f"{q_num} ❌ ({tr(user_id, 'no_answer_text')})\n"
-                wrong += 1
-
-        # 🔹 resultni DB ga saqlaymiz
-        if user_id not in sessions:
+        if not result:
             return
-        cursor.execute("""
-            INSERT INTO results (user_id, section_id, correct, wrong, score, mode, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (
-            user_id,
-            sec_id,
-            correct,
-            wrong,
-            total_score,
-            "file_test",
-            datetime.now().strftime("%Y-%m-%d %H:%M")
-        ))
-        conn.commit()
 
-        # 🔹 userga chiqaramiz
+        result_text, correct, wrong, total_score = result
+
         await callback.message.answer(
             f"{tr(user_id, 'results_title')}:\n\n"
             f"{result_text}\n"
@@ -2347,6 +2572,8 @@ async def finish_test(callback: CallbackQuery):
             f"❌ {tr(user_id, 'wrong')}: {wrong}\n"
             f"🏆 {tr(user_id, 'score')}: {total_score}"
         )
+
+        # 🔹 userga chiqaramiz
 
         session = sessions.get(user_id)
 
@@ -2357,8 +2584,8 @@ async def finish_test(callback: CallbackQuery):
                 task.cancel()
                 try:
                     await task
-                except:
-                    pass
+                except Exception as e:
+                    logging.error(e)
 
         # 🔹 sessionni yopamiz
         user_id = callback.from_user.id
@@ -2366,12 +2593,13 @@ async def finish_test(callback: CallbackQuery):
         if user_id in sessions:
             del sessions[user_id]
     
-        cursor.execute("""
+        await db_execute("""
             DELETE FROM user_answers
             WHERE user_id=? AND section_id=?
-        """, (user_id, sec_id))
-
-        conn.commit()
+        """, (
+            user_id,
+            sec_id
+        ), commit=True)
     finally:
 
         processing_users.discard(user_id)
@@ -2878,7 +3106,7 @@ async def collect_answers(message: Message):
         ]
 
         # agar 8 sekund ichida 10 martadan ko‘p yozsa
-        if len(spam_tracker[user_id]) >= 8:
+        if len(spam_tracker[user_id]) >= 15:
                 
             temp_bans[user_id] = datetime.now() + timedelta(minutes=3)
 
@@ -2930,26 +3158,40 @@ async def collect_answers(message: Message):
             continue
 
     # 🔥 bor-yo‘qligini tekshiradi
-        cursor.execute("""
-            SELECT id FROM user_answers
+        exists = await db_execute("""
+            SELECT id
+            FROM user_answers
             WHERE user_id=? AND section_id=? AND question_number=?
-        """, (user_id, sec_id, q))
-
-        exists = cursor.fetchone()
+        """, (
+            user_id,
+            sec_id,
+            q
+        ), fetchone=True)
 
         if exists:
             # update
-            cursor.execute(""" 
+            await db_execute("""
                 UPDATE user_answers
                 SET user_answer=?
                 WHERE user_id=? AND section_id=? AND question_number=?
-            """, (ans, user_id, sec_id, q))
+            """, (
+                ans,
+                user_id,
+                sec_id,
+                q
+            ), commit=True)
         else:
             # insert
-            cursor.execute("""
-                INSERT INTO user_answers (user_id, section_id, question_number, user_answer)
+            await db_execute("""
+                INSERT INTO user_answers
+                (user_id, section_id, question_number, user_answer)
                 VALUES (?, ?, ?, ?)
-                """, (user_id, sec_id, q, ans))
+            """, (
+                user_id,
+                sec_id,
+                q,
+                ans
+            ), commit=True)
 
     conn.commit()
     
