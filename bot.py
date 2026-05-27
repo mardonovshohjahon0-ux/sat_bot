@@ -1217,11 +1217,10 @@ async def upload_file_start(message: Message):
         ]
     )
 
-    await message.answer(
-        tr(message.from_user.id, "choose_subject"),
+    await callback.message.edit_text(
+        tr(callback.from_user.id, "choose_source"),
         reply_markup=kb
     )
-
 @dp.callback_query(F.data.startswith("uploadsub_"))
 async def upload_choose_source(callback: CallbackQuery):
 
