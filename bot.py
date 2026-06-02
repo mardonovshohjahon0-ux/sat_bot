@@ -1217,8 +1217,8 @@ async def upload_file_start(message: Message):
         ]
     )
 
-    await callback.message.edit_text(
-        tr(callback.from_user.id, "choose_source"),
+    await message.answer(
+        tr(message.from_user.id, "choose_source"),
         reply_markup=kb
     )
 @dp.callback_query(F.data.startswith("uploadsub_"))
@@ -1248,8 +1248,8 @@ async def upload_choose_source(callback: CallbackQuery):
         inline_keyboard=buttons
     )
 
-    await message.answer(
-        tr(message.from_user.id, "choose_source"),
+    await callback.message.edit_text(
+        tr(callback.from_user.id, "choose_source"),
         reply_markup=kb
     )     
     
@@ -3122,6 +3122,8 @@ async def save_test(message: Message, state: FSMContext):
         return await message.answer(
             tr(message.from_user.id, "choose_1_2")
         )
+
+    mode = "fixed" if message.text == "1" else "flex"
 
     data = await state.get_data()
 
