@@ -305,7 +305,7 @@ temp = {}
 # ---------------- MENUS ----------------
 LANGS = {
     "uz": {
-        "choose_1_2": "1 yoki 2 yuboring",
+        "choose_1_2": "1 yoki 2 yuboring.",
         "welcome": "Xush kelibsiz!",
         "choose_lang": "Tilni tanlang:",
         "enter_name": "Ismingizni kiriting:",
