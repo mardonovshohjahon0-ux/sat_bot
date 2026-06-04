@@ -772,7 +772,6 @@ class UploadFile(StatesGroup):
 
 class Register(StatesGroup):
     name = State()
-    age = State()
 
 class AddSource(StatesGroup):
     subject = State()
@@ -1111,68 +1110,34 @@ async def receive_help_message(message: Message, state: FSMContext):
 
 @dp.message(Register.name)
 async def reg_name(message: Message, state: FSMContext):
-    await message.answer("REG_NAME_HANDLER")
-
-    await state.update_data(name=message.text)
-
-    await state.set_state(Register.age)
-
-    await message.answer("AGE PLEASE")
-
-@dp.message(Register.age)
-async def reg_age(message: Message, state: FSMContext):
-
-    print("STEP 1")
-
-    if not message.text.isdigit():
-        return await message.answer("Faqat son")
-
-    print("STEP 2")
 
     data = await state.get_data()
 
-    print("DATA =", data)
-
     username = message.from_user.username or "-"
 
-    try:
-
-        print("STEP 3")
-
-        cursor.execute(
-            """
-            INSERT INTO users
-            (user_id, name, age, username, language)
-            VALUES (%s, %s, %s, %s, %s)
-            """,
-            (
-                message.from_user.id,
-                data["name"],
-                message.text,
-                username,
-                data["language"]
-            )
+    cursor.execute(
+        """
+        INSERT INTO users
+        (user_id, name, username, language)
+        VALUES (%s, %s, %s, %s)
+        """,
+        (
+            message.from_user.id,
+            message.text,
+            username,
+            data["language"]
         )
+    )
 
-        print("STEP 4")
+    conn.commit()
 
-        conn.commit()
-
-        print("STEP 5")
-
-    except Exception as e:
-
-        print("ERROR =", e)
-
-        await message.answer(f"ERROR: {e}")
-
-        return
-
-    await message.answer("REGISTERED")
-
-    print("STEP 6")
+    await message.answer(
+        tr(message.from_user.id, "registered"),
+        reply_markup=get_main_menu(message.from_user.id)
+    )
 
     await state.clear()
+
 
 # ---------------- ADD SECTION ----------------
 
@@ -1886,7 +1851,6 @@ async def profile_menu(message: Message):
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text=tr(message.from_user.id, "edit_name"), callback_data="edit_name")],
-            [InlineKeyboardButton(text=tr(message.from_user.id, "edit_age"), callback_data="edit_age")],
             [InlineKeyboardButton(text=tr(message.from_user.id, "change_language"), callback_data="change_lang")]
         ]
     )
@@ -1985,39 +1949,6 @@ async def save_new_name(message: Message, state: FSMContext):
     )
     await state.clear()
 
-@dp.callback_query(F.data == "edit_age")
-async def edit_age_start(callback: CallbackQuery, state: FSMContext):
-    user_id = callback.from_user.id
-
-    if await check_flood(user_id):
-
-        return await callback.answer(
-            tr(user_id, "flood_callback"),
-            show_alert=True
-        )
-
-    await callback.answer()
-    await callback.message.answer(
-        tr(callback.from_user.id, "new_age")
-    )
-    await state.set_state(EditProfile.age)
-
-@dp.message(EditProfile.age)
-async def save_new_age(message: Message, state: FSMContext):
-    if not message.text.isdigit():
-        return await message.answer(
-            tr(message.from_user.id, "numbers_only")
-        )
-    cursor.execute(
-        "UPDATE users SET age=%s WHERE user_id=%s",
-        (message.text, message.from_user.id)
-    )
-    conn.commit()
-
-    await message.answer(
-        tr(message.from_user.id, "age_updated")
-    )
-    await state.clear()
 
     
 @dp.callback_query(F.data.startswith("startsec_"))
