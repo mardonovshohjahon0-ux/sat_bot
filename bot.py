@@ -1121,9 +1121,38 @@ async def reg_name(message: Message, state: FSMContext):
 
 @dp.message(Register.age)
 async def reg_age(message: Message, state: FSMContext):
-    await message.answer("REG_AGE_HANDLER")
+    await message.answer("STEP 1")
 
-    return
+    data = await state.get_data()
+
+    await message.answer("STEP 2")
+
+    username = message.from_user.username or "-"
+
+    await message.answer("STEP 3")
+
+    cursor.execute(
+        "INSERT INTO users(user_id, name, age, username, language) VALUES (%s, %s, %s, %s, %s)",
+        (
+            message.from_user.id,
+            data["name"],
+            message.text,
+            username,
+            data["language"]
+        )
+    )
+
+    await message.answer("STEP 4")
+
+    conn.commit()
+
+    await message.answer("STEP 5")
+
+    await message.answer(
+        tr(message.from_user.id, "registered")
+    )
+
+    await message.answer("STEP 6")
 
 # ---------------- ADD SECTION ----------------
 
