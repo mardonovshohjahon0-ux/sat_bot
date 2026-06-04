@@ -1140,9 +1140,10 @@ async def reg_age(message: Message, state: FSMContext):
     
     conn.commit()
 
+    await message.answer("TEST 1")
+
     await message.answer(
         tr(message.from_user.id, "registered"),
-        reply_markup=get_main_menu(message.from_user.id)
     )
     await state.clear()
 
@@ -1330,7 +1331,7 @@ async def upload_test_selected(
     await state.update_data(sec_id=sec_id)
 
     await callback.message.answer(
-        tr(callback.from_user.id, "send_file_text")
+        tr(callback.from_user.id, "send_file")
     )
 
     await state.set_state(UploadFile.waiting_file)
