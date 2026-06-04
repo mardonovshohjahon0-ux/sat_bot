@@ -1122,73 +1122,55 @@ async def reg_name(message: Message, state: FSMContext):
 @dp.message(Register.age)
 async def reg_age(message: Message, state: FSMContext):
 
-    await message.answer("STEP 1")
-
-    data = await state.get_data()
-
-    await message.answer("STEP 2")
-
-    username = message.from_user.username or "-"
-
-    await message.answer("STEP 3")
-
-    cursor.execute(
-        "INSERT INTO users(user_id, name, age, username, language) VALUES (%s, %s, %s, %s, %s)",
-        (
-            message.from_user.id,
-            data["name"],
-            message.text,
-            username,
-            data["language"]
-        )
-    )
-
-    await message.answer("STEP 4")
-
-    conn.commit()
-
-    await message.answer("STEP 5")
-
-    await message.answer(
-        tr(message.from_user.id, "registered")
-    )
-
-    await message.answer("STEP 6")
-    
-    print("AGE HANDLER ENTERED")
+    print("STEP 1")
 
     if not message.text.isdigit():
-        return await message.answer(
-            tr(message.from_user.id, "numbers_only")
-        )
+        return await message.answer("Faqat son")
+
+    print("STEP 2")
 
     data = await state.get_data()
 
-    print(data)
+    print("DATA =", data)
 
     username = message.from_user.username or "-"
 
-    cursor.execute(
-        "INSERT INTO users(user_id, name, age, username, language) VALUES (%s, %s, %s, %s, %s)",
-        (
-            message.from_user.id,
-            data["name"],
-            message.text,
-            username,
-            data["language"]
+    try:
+
+        print("STEP 3")
+
+        cursor.execute(
+            """
+            INSERT INTO users
+            (user_id, name, age, username, language)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (
+                message.from_user.id,
+                data["name"],
+                message.text,
+                username,
+                data["language"]
+            )
         )
-    )
 
-    conn.commit()
+        print("STEP 4")
 
-    print("INSERT DONE")
+        conn.commit()
 
-    await message.answer(
-        tr(message.from_user.id, "registered"),
-        reply_markup=get_main_menu(message.from_user.id)
-    )
+        print("STEP 5")
 
-    print("MESSAGE SENT")
+    except Exception as e:
+
+        print("ERROR =", e)
+
+        await message.answer(f"ERROR: {e}")
+
+        return
+
+    await message.answer("REGISTERED")
+
+    print("STEP 6")
 
     await state.clear()
 
