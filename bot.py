@@ -92,6 +92,7 @@ cursor.execute("""
 CREATE TABLE IF NOT EXISTS users (
     user_id INTEGER PRIMARY KEY,
     name TEXT,
+    age TEXT,
     username TEXT,
     language TEXT DEFAULT 'uz'
 )
@@ -1834,11 +1835,12 @@ async def save_rename(message: Message, state: FSMContext):
 # ---------------- PROFILE ----------------
 
 class EditProfile(StatesGroup):
-    name = State()\
+    name = State()
+    age = State()
 
 @dp.message(is_menu_text("profile"))
 async def profile_menu(message: Message):
-    cursor.execute("SELECT name FROM users WHERE user_id=%s", (message.from_user.id,))
+    cursor.execute("SELECT name, age FROM users WHERE user_id=%s", (message.from_user.id,))
     user = cursor.fetchone()
 
     if not user:
@@ -1855,7 +1857,8 @@ async def profile_menu(message: Message):
 
     await message.answer(
         f"👤 {tr(message.from_user.id, 'profile_info')}\n"
-        f"{tr(message.from_user.id, 'profile_name')}: {user[0]}\n",
+        f"{tr(message.from_user.id, 'profile_name')}: {user[0]}\n"
+        f"{tr(message.from_user.id, 'profile_age')}: {user[1]}",
         reply_markup=kb
     )
 
@@ -2451,12 +2454,13 @@ async def user_info(callback: CallbackQuery):
             tr_admin("user_not_found")
         )
 
-    name, username = user[1], user[2]
+    name, age, username = user[1], user[2], user[3]
 
     text = f"""
     👤 <b>{tr(callback.from_user.id, 'user_info')}</b>
     
     {tr(callback.from_user.id, 'profile_name')}: {name}
+    {tr(callback.from_user.id, 'profile_age')}: {age}
     Username: @{username if username else '-'}
     """
 
@@ -2512,7 +2516,7 @@ async def user_section_result(callback: CallbackQuery):
     sec = cursor.fetchone()
     await callback.answer()
 
-    cursor.execute("SELECT name username FROM users WHERE user_id=%s", (uid,))
+    cursor.execute("SELECT name, age, username FROM users WHERE user_id=%s", (uid,))
     u = cursor.fetchone()
 
     if not sec:
