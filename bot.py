@@ -1111,41 +1111,19 @@ async def receive_help_message(message: Message, state: FSMContext):
 
 @dp.message(Register.name)
 async def reg_name(message: Message, state: FSMContext):
+    await message.answer("REG_NAME_HANDLER")
+
     await state.update_data(name=message.text)
-    await message.answer(
-        tr(message.from_user.id, "enter_age")
-    )
+
     await state.set_state(Register.age)
+
+    await message.answer("AGE PLEASE")
 
 @dp.message(Register.age)
 async def reg_age(message: Message, state: FSMContext):
-    if not message.text.isdigit():
-        return await message.answer(
-            tr(message.from_user.id, "numbers_only")
-        )
-    data = await state.get_data()
+    await message.answer("REG_AGE_HANDLER")
 
-    username = message.from_user.username or "-"
-
-    cursor.execute(
-        "INSERT INTO users(user_id, name, age, username, language) VALUES (%s, %s, %s, %s, %s)",
-        (
-            message.from_user.id,
-            data["name"],
-            message.text,
-            username,
-            data["language"]
-        )
-    )
-    
-    conn.commit()
-
-    await message.answer("TEST 1")
-
-    await message.answer(
-        tr(message.from_user.id, "registered"),
-    )
-    await state.clear()
+    return
 
 # ---------------- ADD SECTION ----------------
 
