@@ -1110,7 +1110,11 @@ async def receive_help_message(message: Message, state: FSMContext):
 @dp.message(Register.name)
 async def reg_name(message: Message, state: FSMContext):
 
+    await message.answer("1")
+
     data = await state.get_data()
+
+    await message.answer(f"2 {data}")
 
     username = message.from_user.username or "-"
 
@@ -1128,12 +1132,18 @@ async def reg_name(message: Message, state: FSMContext):
         )
     )
 
+    await message.answer("3")
+
     conn.commit()
+
+    await message.answer("4")
 
     await message.answer(
         tr(message.from_user.id, "registered"),
         reply_markup=get_main_menu(message.from_user.id)
     )
+
+    await message.answer("5")
 
     await state.clear()
 
