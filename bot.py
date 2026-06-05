@@ -1118,19 +1118,26 @@ async def reg_name(message: Message, state: FSMContext):
 
     username = message.from_user.username or "-"
 
-    cursor.execute(
-        """
-        INSERT INTO users
-        (user_id, name, username, language)
-        VALUES (%s, %s, %s, %s)
-        """,
-        (
-            message.from_user.id,
-            message.text,
-            username,
-            data["language"]
+    try:
+        cursor.execute(
+            """
+            INSERT INTO users
+            (user_id, name, username, language)
+            VALUES (%s, %s, %s, %s)
+            """,
+            (
+                message.from_user.id,
+                message.text,
+                username,
+                data["language"]
+            )
         )
-    )
+
+        await message.answer("SQL OK")
+
+    except Exception as e:
+        await message.answer(f"SQL ERROR:\n{e}")
+        return
 
     await message.answer("3")
 
