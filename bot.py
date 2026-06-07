@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS section_categories (
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS user_answers (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER,
+    user_id BIGINT,
     section_id INTEGER,
     question_number INTEGER,
     user_answer TEXT
@@ -90,7 +90,7 @@ CREATE TABLE IF NOT EXISTS user_answers (
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS users (
-    user_id INTEGER PRIMARY KEY,
+    user_id BIGINT PRIMARY KEY
     name TEXT,
     username TEXT,
     language TEXT DEFAULT 'uz'
@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS questions (
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS results (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER,
+    user_id BIGINT,
     section_id INTEGER,
     correct INTEGER,
     wrong INTEGER,
@@ -140,7 +140,7 @@ ON user_answers(user_id)
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS bans (
-    user_id INTEGER PRIMARY KEY,
+    user_id BIGINT PRIMARY KEY
     reason TEXT,
     banned_at TEXT
 )
@@ -149,7 +149,7 @@ CREATE TABLE IF NOT EXISTS bans (
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS help_messages (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER,
+    user_id BIGINT,
     username TEXT,
     message TEXT,
     created_at TEXT
