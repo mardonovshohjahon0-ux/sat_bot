@@ -42,16 +42,7 @@ db_lock = asyncio.Lock()
 
 # ---------------- DATABASE ----------------
 
-conn = sqlite3.connect(
-    "sat.db",
-    check_same_thread=False,
-    timeout=30
-)
-cursor = conn.cursor()
-db_lock = asyncio.Lock()
 
-conn.execute("PRAGMA journal_mode=WAL")
-conn.execute("PRAGMA synchronous=NORMAL")
 
 
 
