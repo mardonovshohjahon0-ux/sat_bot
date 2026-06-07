@@ -2191,7 +2191,7 @@ async def my_results(message: Message):
             f"📚 {r[0]}\n"
             f"📂 {r[1]}\n"
             f"📝 {r[2]}\n"
-            f"✔ {r[3]} | ❌ {r[4]} | 🏆 {r[5]}\n"
+            f"✔ {r[3]} | ❌ {r[4]} | 🏆 {r[5]} | /800 \n"
             f"📅 {r[6]}\n\n"
         )
 
