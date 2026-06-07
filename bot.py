@@ -1137,10 +1137,7 @@ async def reg_age(message: Message, state: FSMContext):
     
     conn.commit()
 
-    await message.answer(
-        tr(message.from_user.id, "registered"),
-        reply_markup=get_main_menu(message.from_user.id)
-    )
+    await message.answer("REGISTER OK")
     await state.clear()
 
 # ---------------- ADD SECTION ----------------
@@ -2806,7 +2803,7 @@ async def errors_handler(event: ErrorEvent):
 
     logging.error(event.exception)
 
-    return True
+    return False
 
 
 async def main():
