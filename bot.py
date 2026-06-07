@@ -1,5 +1,5 @@
 import asyncio
-import psycopg2
+import sqlite3
 import logging
 from collections import defaultdict
 import time
@@ -33,24 +33,24 @@ logging.basicConfig(
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-DATABASE_URL = os.environ["DATABASE_URL"]
-
-conn = psycopg2.connect(DATABASE_URL)
-
-cursor = conn.cursor()
-
-db_lock = asyncio.Lock()
-
 # ---------------- DATABASE ----------------
 
+conn = sqlite3.connect(
+    "sat.db",
+    check_same_thread=False,
+    timeout=30
+)
+cursor = conn.cursor()
+db_lock = asyncio.Lock()
 
-
+conn.execute("PRAGMA journal_mode=WAL")
+conn.execute("PRAGMA synchronous=NORMAL")
 
 
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS section_answers (
-    id SERIAL PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     section_id INTEGER,
     question_number INTEGER,
     correct_answer TEXT,
@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS section_answers (
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS sections (
-    id SERIAL PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT,
     time_limit INTEGER,
     mode TEXT,
@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS sections (
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS section_categories (
-    id SERIAL PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     subject TEXT,
     source TEXT,
     practice TEXT
@@ -80,8 +80,8 @@ CREATE TABLE IF NOT EXISTS section_categories (
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS user_answers (
-    id SERIAL PRIMARY KEY,
-    user_id BIGINT,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
     section_id INTEGER,
     question_number INTEGER,
     user_answer TEXT
@@ -90,8 +90,9 @@ CREATE TABLE IF NOT EXISTS user_answers (
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS users (
-    user_id BIGINT PRIMARY KEY
+    user_id INTEGER PRIMARY KEY,
     name TEXT,
+    age TEXT,
     username TEXT,
     language TEXT DEFAULT 'uz'
 )
@@ -100,7 +101,7 @@ CREATE TABLE IF NOT EXISTS users (
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS questions (
-    id SERIAL PRIMARY KEY,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     section_id INTEGER,
     photo TEXT,
     type TEXT,
@@ -112,8 +113,8 @@ CREATE TABLE IF NOT EXISTS questions (
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS results (
-    id SERIAL PRIMARY KEY,
-    user_id BIGINT,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
     section_id INTEGER,
     correct INTEGER,
     wrong INTEGER,
@@ -140,7 +141,7 @@ ON user_answers(user_id)
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS bans (
-    user_id BIGINT PRIMARY KEY
+    user_id INTEGER PRIMARY KEY,
     reason TEXT,
     banned_at TEXT
 )
@@ -148,8 +149,8 @@ CREATE TABLE IF NOT EXISTS bans (
 
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS help_messages (
-    id SERIAL PRIMARY KEY,
-    user_id BIGINT,
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
     username TEXT,
     message TEXT,
     created_at TEXT
@@ -290,7 +291,7 @@ processing_users = set()
 async def is_banned(user_id):
 
     cursor.execute(
-        "SELECT * FROM bans WHERE user_id=%s",
+        "SELECT * FROM bans WHERE user_id=?",
         (user_id,)
     )
 
@@ -304,7 +305,7 @@ temp = {}
 # ---------------- MENUS ----------------
 LANGS = {
     "uz": {
-        "choose_1_2": "1 yoki 2 yuboring.",
+        "choose_1_2": "1 yoki 2 yuboring",
         "welcome": "Xush kelibsiz!",
         "choose_lang": "Tilni tanlang:",
         "enter_name": "Ismingizni kiriting:",
@@ -771,6 +772,7 @@ class UploadFile(StatesGroup):
 
 class Register(StatesGroup):
     name = State()
+    age = State()
 
 class AddSource(StatesGroup):
     subject = State()
@@ -913,7 +915,7 @@ async def timer(user_id, seconds):
 def get_lang(user_id):
 
     cursor.execute(
-        "SELECT language FROM users WHERE user_id=%s",
+        "SELECT language FROM users WHERE user_id=?",
         (user_id,)
     )
 
@@ -967,7 +969,7 @@ async def choose_language(message: Message, state: FSMContext):
     await state.update_data(language=lang)
     
     cursor.execute(
-        "SELECT * FROM users WHERE user_id=%s",
+        "SELECT * FROM users WHERE user_id=?",
         (message.from_user.id,)
     )
 
@@ -976,7 +978,7 @@ async def choose_language(message: Message, state: FSMContext):
     if existing_user:
 
         cursor.execute(
-            "UPDATE users SET language=%s WHERE user_id=%s",
+            "UPDATE users SET language=? WHERE user_id=?",
             (lang, message.from_user.id)
         )
 
@@ -1035,7 +1037,7 @@ async def start(message: Message, state: FSMContext):
 
     # USER BOR-YO‘QLIGINI TEKSHIRAMIZ
     cursor.execute(
-        "SELECT * FROM users WHERE user_id=%s",
+        "SELECT * FROM users WHERE user_id=?",
         (user_id,)
     )
 
@@ -1050,7 +1052,6 @@ async def start(message: Message, state: FSMContext):
         )
 
         return
-
 
     # AGAR YANGI USER BO‘LSA → TIL TANLAYDI
     kb = ReplyKeyboardMarkup(
@@ -1091,7 +1092,7 @@ async def receive_help_message(message: Message, state: FSMContext):
     cursor.execute("""
         INSERT INTO help_messages
         (user_id, username, message, created_at)
-        VALUES (%s, %s, %s, %s)
+        VALUES (?, ?, ?, ?)
     """, (
         message.from_user.id,
         username,
@@ -1109,51 +1110,40 @@ async def receive_help_message(message: Message, state: FSMContext):
 
 @dp.message(Register.name)
 async def reg_name(message: Message, state: FSMContext):
+    await state.update_data(name=message.text)
+    await message.answer(
+        tr(message.from_user.id, "enter_age")
+    )
+    await state.set_state(Register.age)
 
-    await message.answer("1")
-
+@dp.message(Register.age)
+async def reg_age(message: Message, state: FSMContext):
+    if not message.text.isdigit():
+        return await message.answer(
+            tr(message.from_user.id, "numbers_only")
+        )
     data = await state.get_data()
-
-    await message.answer(f"2 {data}")
 
     username = message.from_user.username or "-"
 
-    try:
-        cursor.execute(
-            """
-            INSERT INTO users
-            (user_id, name, username, language)
-            VALUES (%s, %s, %s, %s)
-            """,
-            (
-                message.from_user.id,
-                message.text,
-                username,
-                data["language"]
-            )
+    cursor.execute(
+        "INSERT INTO users(user_id, name, age, username, language) VALUES (?, ?, ?, ?, ?)",
+        (
+            message.from_user.id,
+            data["name"],
+            message.text,
+            username,
+            data["language"]
         )
-
-        await message.answer("SQL OK")
-
-    except Exception as e:
-        await message.answer(f"SQL ERROR:\n{e}")
-        return
-
-    await message.answer("3")
-
+    )
+    
     conn.commit()
-
-    await message.answer("4")
 
     await message.answer(
         tr(message.from_user.id, "registered"),
         reply_markup=get_main_menu(message.from_user.id)
     )
-
-    await message.answer("5")
-
     await state.clear()
-
 
 # ---------------- ADD SECTION ----------------
 
@@ -1188,7 +1178,7 @@ async def sec_mode(message: Message, state: FSMContext):
     data = await state.get_data()
 
     cursor.execute(
-        "INSERT INTO sections (title, time_limit, mode) VALUES (%s, %s, %s)",
+        "INSERT INTO sections (title, time_limit, mode) VALUES (?, ?, ?)",
         (data["title"], data["time"], mode)
     )
     conn.commit()
@@ -1239,7 +1229,7 @@ async def upload_choose_source(callback: CallbackQuery):
     cursor.execute("""
         SELECT DISTINCT source
         FROM section_categories
-        WHERE subject=%s
+        WHERE subject=?
     """, (subject,))
 
     rows = cursor.fetchall()
@@ -1262,7 +1252,7 @@ async def upload_choose_source(callback: CallbackQuery):
         tr(callback.from_user.id, "choose_source"),
         reply_markup=kb
     )     
-
+    
 @dp.callback_query(F.data.startswith("uploadsource_"))
 async def upload_choose_practice(callback: CallbackQuery):
 
@@ -1272,7 +1262,7 @@ async def upload_choose_practice(callback: CallbackQuery):
     cursor.execute("""
         SELECT id, practice
         FROM section_categories
-        WHERE subject=%s AND source=%s AND practice!=''
+        WHERE subject=? AND source=? AND practice!=''
     """, (subject, source))
 
     rows = cursor.fetchall()
@@ -1304,7 +1294,7 @@ async def upload_choose_test(callback: CallbackQuery):
     cursor.execute("""
         SELECT id, title
         FROM sections
-        WHERE category_id=%s
+        WHERE category_id=?
     """ , (category_id,))
 
     rows = cursor.fetchall()
@@ -1339,7 +1329,7 @@ async def upload_test_selected(
     await state.update_data(sec_id=sec_id)
 
     await callback.message.answer(
-        tr(callback.from_user.id, "send_file")
+        tr(callback.from_user.id, "send_file_text")
     )
 
     await state.set_state(UploadFile.waiting_file)
@@ -1478,7 +1468,7 @@ async def practice_list(callback: CallbackQuery):
     cursor.execute("""
         SELECT id, practice
         FROM section_categories
-        WHERE source=%s AND practice!=''
+        WHERE source=? AND practice!=''
     """, (source,))
 
     rows = cursor.fetchall()
@@ -1501,7 +1491,7 @@ async def practice_list(callback: CallbackQuery):
         tr(callback.from_user.id, "choose_practice"),
         reply_markup=kb
     )
-
+    
 @dp.callback_query(F.data.startswith("practiceedit_"))
 async def practice_actions(callback: CallbackQuery):
 
@@ -1563,7 +1553,7 @@ async def edit_test(callback: CallbackQuery):
         tr(callback.from_user.id, "choose_source"),
         reply_markup=kb
     )
-
+    
 @dp.callback_query(F.data.startswith("test_source_"))
 async def test_practice_list(callback: CallbackQuery):
 
@@ -1572,7 +1562,7 @@ async def test_practice_list(callback: CallbackQuery):
     cursor.execute("""
         SELECT id, practice
         FROM section_categories
-        WHERE source=%s AND practice!=''
+        WHERE source=? AND practice!=''
     """, (source,))
 
     rows = cursor.fetchall()
@@ -1604,7 +1594,7 @@ async def test_list(callback: CallbackQuery):
     cursor.execute("""
         SELECT id, title
         FROM sections
-        WHERE category_id=%s
+        WHERE category_id=?
     """, (cat_id,))
 
     rows = cursor.fetchall()
@@ -1678,7 +1668,7 @@ async def delete_item(callback: CallbackQuery):
         cursor.execute("""
             SELECT id
             FROM section_categories
-            WHERE source=%s
+            WHERE source=?
         """, (source,))
 
         cats = cursor.fetchall()
@@ -1691,7 +1681,7 @@ async def delete_item(callback: CallbackQuery):
                 DELETE FROM section_answers
                 WHERE section_id IN (
                     SELECT id FROM sections
-                    WHERE category_id=%s
+                    WHERE category_id=?
                 )
             """, (cat_id,))
             
@@ -1699,7 +1689,7 @@ async def delete_item(callback: CallbackQuery):
                 DELETE FROM results
                 WHERE section_id IN (
                     SELECT id FROM sections
-                    WHERE category_id=%s
+                    WHERE category_id=?
                 )
             """, (cat_id,))
             
@@ -1707,18 +1697,18 @@ async def delete_item(callback: CallbackQuery):
                 DELETE FROM user_answers
                 WHERE section_id IN (
                     SELECT id FROM sections
-                    WHERE category_id=%s
+                    WHERE category_id=?
                 )
             """, (cat_id,))
             
             cursor.execute("""
                 DELETE FROM sections
-                WHERE category_id=%s
+                WHERE category_id=?
             """, (cat_id,))
 
         cursor.execute("""
             DELETE FROM section_categories
-            WHERE source=%s
+            WHERE source=?
         """, (source,))
 
     # PRACTICE DELETE
@@ -1730,7 +1720,7 @@ async def delete_item(callback: CallbackQuery):
             DELETE FROM results
             WHERE section_id IN (
                 SELECT id FROM sections
-                WHERE category_id=%s
+                WHERE category_id=?
             )
         """, (cat_id,))
         
@@ -1738,18 +1728,18 @@ async def delete_item(callback: CallbackQuery):
             DELETE FROM user_answers
             WHERE section_id IN (
                 SELECT id FROM sections
-                WHERE category_id=%s
+                WHERE category_id=?
             )
         """, (cat_id,))
 
         cursor.execute("""
             DELETE FROM sections
-            WHERE category_id=%s
+            WHERE category_id=?
         """, (cat_id,))
 
         cursor.execute("""
             DELETE FROM section_categories
-            WHERE id=%s
+            WHERE id=?
         """, (cat_id,))
     elif edit_type == "test":
 
@@ -1757,27 +1747,27 @@ async def delete_item(callback: CallbackQuery):
         
         cursor.execute("""
             DELETE FROM results
-            WHERE section_id=%s
+            WHERE section_id=?
         """, (sec_id,))
 
         cursor.execute("""
             DELETE FROM user_answers
-            WHERE section_id=%s
+            WHERE section_id=?
         """, (sec_id,))
 
         cursor.execute("""
             DELETE FROM section_answers
-            WHERE section_id=%s
+            WHERE section_id=?
         """, (sec_id,))
 
         cursor.execute("""
             DELETE FROM questions
-            WHERE section_id=%s
+            WHERE section_id=?
         """, (sec_id,))
 
         cursor.execute("""
             DELETE FROM sections
-            WHERE id=%s
+            WHERE id=?
         """, (sec_id,))
     conn.commit()
     
@@ -1810,8 +1800,8 @@ async def save_rename(message: Message, state: FSMContext):
 
         cursor.execute("""
             UPDATE section_categories
-            SET source=%s
-            WHERE source=%s
+            SET source=?
+            WHERE source=?
         """, (
             message.text,
             data["source"]
@@ -1822,8 +1812,8 @@ async def save_rename(message: Message, state: FSMContext):
 
         cursor.execute("""
             UPDATE section_categories
-            SET practice=%s
-            WHERE id=%s
+            SET practice=?
+            WHERE id=?
         """, (
             message.text,
             data["category_id"]
@@ -1832,8 +1822,8 @@ async def save_rename(message: Message, state: FSMContext):
 
         cursor.execute("""
             UPDATE sections
-            SET title=%s
-            WHERE id=%s
+            SET title=?
+            WHERE id=?
         """, (
             message.text,
             data["section_id"]
@@ -1852,10 +1842,11 @@ async def save_rename(message: Message, state: FSMContext):
 
 class EditProfile(StatesGroup):
     name = State()
+    age = State()
 
 @dp.message(is_menu_text("profile"))
 async def profile_menu(message: Message):
-    cursor.execute("SELECT name FROM users WHERE user_id=%s", (message.from_user.id,))
+    cursor.execute("SELECT name, age FROM users WHERE user_id=?", (message.from_user.id,))
     user = cursor.fetchone()
 
     if not user:
@@ -1866,6 +1857,7 @@ async def profile_menu(message: Message):
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text=tr(message.from_user.id, "edit_name"), callback_data="edit_name")],
+            [InlineKeyboardButton(text=tr(message.from_user.id, "edit_age"), callback_data="edit_age")],
             [InlineKeyboardButton(text=tr(message.from_user.id, "change_language"), callback_data="change_lang")]
         ]
     )
@@ -1925,7 +1917,7 @@ async def save_lang(callback: CallbackQuery):
     lang = callback.data.split("_")[1]
 
     await db_execute(
-        "UPDATE users SET language=%s WHERE user_id=%s",
+        "UPDATE users SET language=? WHERE user_id=?",
         (lang, callback.from_user.id),
         commit=True
     )
@@ -1954,7 +1946,7 @@ async def edit_name_start(callback: CallbackQuery, state: FSMContext):
 @dp.message(EditProfile.name)
 async def save_new_name(message: Message, state: FSMContext):
     cursor.execute(
-        "UPDATE users SET name=%s WHERE user_id=%s",
+        "UPDATE users SET name=? WHERE user_id=?",
         (message.text, message.from_user.id)
     )
     conn.commit()
@@ -1964,6 +1956,39 @@ async def save_new_name(message: Message, state: FSMContext):
     )
     await state.clear()
 
+@dp.callback_query(F.data == "edit_age")
+async def edit_age_start(callback: CallbackQuery, state: FSMContext):
+    user_id = callback.from_user.id
+
+    if await check_flood(user_id):
+
+        return await callback.answer(
+            tr(user_id, "flood_callback"),
+            show_alert=True
+        )
+
+    await callback.answer()
+    await callback.message.answer(
+        tr(callback.from_user.id, "new_age")
+    )
+    await state.set_state(EditProfile.age)
+
+@dp.message(EditProfile.age)
+async def save_new_age(message: Message, state: FSMContext):
+    if not message.text.isdigit():
+        return await message.answer(
+            tr(message.from_user.id, "numbers_only")
+        )
+    cursor.execute(
+        "UPDATE users SET age=? WHERE user_id=?",
+        (message.text, message.from_user.id)
+    )
+    conn.commit()
+
+    await message.answer(
+        tr(message.from_user.id, "age_updated")
+    )
+    await state.clear()
 
     
 @dp.callback_query(F.data.startswith("startsec_"))
@@ -1995,7 +2020,7 @@ async def start_test(callback: CallbackQuery):
         return
 
     # 🔥 mode va time olish
-    cursor.execute("SELECT mode, time_limit FROM sections WHERE id=%s", (sec_id,))
+    cursor.execute("SELECT mode, time_limit FROM sections WHERE id=?", (sec_id,))
     row = cursor.fetchone()
 
     if not row:
@@ -2051,7 +2076,7 @@ async def start_with_time(callback: CallbackQuery):
     if callback.from_user.id != ADMIN_ID:
         if not await callback_spam_check(callback):
             return
-    cursor.execute("SELECT time_limit FROM sections WHERE id=%s", (sec_id,))
+    cursor.execute("SELECT time_limit FROM sections WHERE id=?", (sec_id,))
     time_limit = cursor.fetchone()[0] or 1
 
     await start_real_test(callback, user_id, sec_id, time_limit)
@@ -2080,7 +2105,7 @@ async def start_real_test(callback, user_id, sec_id, time_limit):
 
     conn.commit()
     # FILE yuborish
-    cursor.execute("SELECT file_id FROM sections WHERE id=%s", (sec_id,))
+    cursor.execute("SELECT file_id FROM sections WHERE id=?", (sec_id,))
     file = cursor.fetchone()
 
     if file and file[0]:
@@ -2103,7 +2128,7 @@ async def start_real_test(callback, user_id, sec_id, time_limit):
     
     cursor.execute("""
         DELETE FROM user_answers
-        WHERE user_id=%s AND section_id=%s
+        WHERE user_id=? AND section_id=?
     """, (user_id, sec_id))
 
     conn.commit()
@@ -2148,7 +2173,7 @@ async def my_results(message: Message):
         JOIN sections s ON s.id = r.section_id
         LEFT JOIN section_categories sc
         ON sc.id = s.category_id
-        WHERE r.user_id=%s
+        WHERE r.user_id=?
         ORDER BY r.id DESC
     """, (message.from_user.id,))
 
@@ -2211,7 +2236,7 @@ async def receive_file(message: Message, state: FSMContext):
     file_id = message.document.file_id
 
     cursor.execute(
-        "UPDATE sections SET file_id=%s WHERE id=%s",
+        "UPDATE sections SET file_id=? WHERE id=?",
         (file_id, sec_id)
     )
     conn.commit()
@@ -2235,7 +2260,7 @@ async def receive_answers(message: Message, state: FSMContext):
 
     cursor.execute("""
         DELETE FROM section_answers
-        WHERE section_id=%s
+        WHERE section_id=?
     """, (sec_id,))
 
     lines = message.text.split("\n")
@@ -2285,7 +2310,7 @@ async def receive_answers(message: Message, state: FSMContext):
                     correct_answer,
                     score
                 )
-                VALUES (%s, %s, %s, %s)
+                VALUES (?, ?, ?, ?)
             """, (
                 sec_id,
                 q_num,
@@ -2390,7 +2415,7 @@ async def show_leaderboard(callback: CallbackQuery):
 
     sec_id = int(callback.data.split("_")[1])
     
-    cursor.execute("SELECT title FROM sections WHERE id=%s", (sec_id,))
+    cursor.execute("SELECT title FROM sections WHERE id=?", (sec_id,))
     sec = cursor.fetchone()
 
     if not sec:
@@ -2407,7 +2432,7 @@ async def show_leaderboard(callback: CallbackQuery):
         MIN(results.wrong)
     FROM results
     JOIN users ON users.user_id = results.user_id
-    WHERE results.section_id=%s
+    WHERE results.section_id=?
     GROUP BY results.user_id
     ORDER BY MAX(results.score) DESC,
          MAX(results.correct) DESC
@@ -2459,7 +2484,7 @@ async def user_info(callback: CallbackQuery):
     uid = int(callback.data.split("_")[1])
 
     user = await db_execute(
-        "SELECT * FROM users WHERE user_id=%s",
+        "SELECT * FROM users WHERE user_id=?",
         (uid,),
         fetchone=True
     )
@@ -2469,7 +2494,7 @@ async def user_info(callback: CallbackQuery):
             tr_admin("user_not_found")
         )
 
-    name, username = user[0], user[1]
+    name, age, username = user[1], user[2], user[3]
 
     text = f"""
     👤 <b>{tr(callback.from_user.id, 'user_info')}</b>
@@ -2527,11 +2552,11 @@ async def user_section_result(callback: CallbackQuery):
     uid = int(parts[1])
     sec_id = int(parts[2])
 
-    cursor.execute("SELECT title FROM sections WHERE id=%s", (sec_id,))
+    cursor.execute("SELECT title FROM sections WHERE id=?", (sec_id,))
     sec = cursor.fetchone()
     await callback.answer()
 
-    cursor.execute("SELECT name, username FROM users WHERE user_id=%s", (uid,))
+    cursor.execute("SELECT name, age, username FROM users WHERE user_id=?", (uid,))
     u = cursor.fetchone()
 
     if not sec:
@@ -2544,7 +2569,7 @@ async def user_section_result(callback: CallbackQuery):
     cursor.execute("""
         SELECT correct, wrong, score, mode, created_at
         FROM results
-        WHERE user_id=%s AND section_id=%s
+        WHERE user_id=? AND section_id=?
         ORDER BY id DESC
     """, (uid, sec_id))
 
@@ -2622,7 +2647,7 @@ async def calculate_result(user_id):
     corrects = await db_execute("""
         SELECT question_number, correct_answer, score
         FROM section_answers
-        WHERE section_id=%s
+        WHERE section_id=?
         ORDER BY question_number ASC
     """, (sec_id,), fetchall=True)
 
@@ -2636,7 +2661,7 @@ async def calculate_result(user_id):
         res = await db_execute("""
             SELECT user_answer
             FROM user_answers
-            WHERE user_id=%s AND section_id=%s AND question_number=%s
+            WHERE user_id=? AND section_id=? AND question_number=?
         """, (
             user_id,
             sec_id,
@@ -2665,7 +2690,7 @@ async def calculate_result(user_id):
 
     await db_execute("""
     INSERT INTO results (user_id, section_id, correct, wrong, score, mode, created_at)
-    VALUES (%s, %s, %s, %s, %s, %s, %s)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     """, (
         user_id,
         sec_id,
@@ -2678,7 +2703,7 @@ async def calculate_result(user_id):
     
     await db_execute("""
         DELETE FROM user_answers
-        WHERE user_id=%s AND section_id=%s
+        WHERE user_id=? AND section_id=?
     """, (
         user_id,
         sec_id
@@ -2770,7 +2795,7 @@ async def finish_test(callback: CallbackQuery):
     
         await db_execute("""
             DELETE FROM user_answers
-            WHERE user_id=%s AND section_id=%s
+            WHERE user_id=? AND section_id=?
         """, (
             user_id,
             sec_id
@@ -2778,12 +2803,12 @@ async def finish_test(callback: CallbackQuery):
     finally:
 
         processing_users.discard(user_id)
-# @dp.errors()
-# async def errors_handler(event: ErrorEvent):
+@dp.errors()
+async def errors_handler(event: ErrorEvent):
 
-#     logging.error(event.exception)
+    logging.error(event.exception)
 
-#     return True
+    return True
 
 
 async def main():
@@ -2843,7 +2868,7 @@ async def save_source(message: Message, state: FSMContext):
     cursor.execute("""
         INSERT INTO section_categories
         (subject, source, practice)
-        VALUES (%s, %s, %s)
+        VALUES (?, ?, ?)
     """, (
         data["subject"],
         message.text,
@@ -2912,7 +2937,7 @@ async def save_practice(message: Message, state: FSMContext):
     cursor.execute("""
         SELECT subject, source
         FROM section_categories
-        WHERE id=%s
+        WHERE id=?
     """, (data["category_id"],))
 
     row = cursor.fetchone()
@@ -2920,7 +2945,7 @@ async def save_practice(message: Message, state: FSMContext):
     cursor.execute("""
         INSERT INTO section_categories
         (subject, source, practice)
-        VALUES (%s, %s, %s)
+        VALUES (?, ?, ?)
     """, (
         row[0],
         row[1],
@@ -2975,7 +3000,7 @@ async def add_test_source(callback: CallbackQuery, state: FSMContext):
     cursor.execute("""
         SELECT DISTINCT source
         FROM section_categories
-        WHERE subject=%s
+        WHERE subject=?
     """, (subject,))
 
     rows = cursor.fetchall()
@@ -3016,7 +3041,7 @@ async def add_test_practice(callback: CallbackQuery, state: FSMContext):
     cursor.execute("""
         SELECT id, practice
         FROM section_categories
-        WHERE subject=%s AND source=%s AND practice!=''
+        WHERE subject=? AND source=? AND practice!=''
     """, (
         data["subject"],
         source
@@ -3044,7 +3069,7 @@ async def add_test_practice(callback: CallbackQuery, state: FSMContext):
     )
 
     await state.set_state(AddTest.practice)
-
+    
 @dp.callback_query(
     AddTest.practice,
     F.data.startswith("testpractice_")
@@ -3105,7 +3130,7 @@ async def save_test(message: Message, state: FSMContext):
     cursor.execute("""
         INSERT INTO sections
         (title, time_limit, mode, category_id)
-        VALUES (%s, %s, %s, %s)
+        VALUES (?, ?, ?, ?)
     """, (
         data["title"],
         data["time"],
@@ -3154,7 +3179,7 @@ async def user_choose_source(callback: CallbackQuery):
     cursor.execute("""
         SELECT DISTINCT source
         FROM section_categories
-        WHERE subject=%s
+        WHERE subject=?
     """, (subject,))
 
     rows = cursor.fetchall()
@@ -3189,7 +3214,7 @@ async def user_choose_practice(callback: CallbackQuery):
     cursor.execute("""
         SELECT id, practice
         FROM section_categories
-        WHERE subject=%s AND source=%s AND practice!=''
+        WHERE subject=? AND source=? AND practice!=''
     """, (subject, source))
 
     rows = cursor.fetchall()
@@ -3221,7 +3246,7 @@ async def user_choose_test(callback: CallbackQuery):
     cursor.execute("""
         SELECT id, title
         FROM sections
-        WHERE category_id=%s
+        WHERE category_id=?
     """, (category_id,))
 
     rows = cursor.fetchall()
@@ -3341,7 +3366,7 @@ async def collect_answers(message: Message):
         exists = await db_execute("""
             SELECT id
             FROM user_answers
-            WHERE user_id=%s AND section_id=%s AND question_number=%s
+            WHERE user_id=? AND section_id=? AND question_number=?
         """, (
             user_id,
             sec_id,
@@ -3352,8 +3377,8 @@ async def collect_answers(message: Message):
             # update
             await db_execute("""
                 UPDATE user_answers
-                SET user_answer=%s
-                WHERE user_id=%s AND section_id=%s AND question_number=%s
+                SET user_answer=?
+                WHERE user_id=? AND section_id=? AND question_number=?
             """, (
                 ans,
                 user_id,
@@ -3365,7 +3390,7 @@ async def collect_answers(message: Message):
             await db_execute("""
                 INSERT INTO user_answers
                 (user_id, section_id, question_number, user_answer)
-                VALUES (%s, %s, %s, %s)
+                VALUES (?, ?, ?, ?)
             """, (
                 user_id,
                 sec_id,
