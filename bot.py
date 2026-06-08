@@ -1202,7 +1202,7 @@ async def upload_file_start(message: Message):
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="English",
+                    text="Reaging and Writing",
                     callback_data="uploadsub_english"
                 )
             ],
@@ -2806,7 +2806,7 @@ async def errors_handler(event: ErrorEvent):
 
     logging.error(event.exception)
 
-    return False
+    return True
 
 
 async def main():
