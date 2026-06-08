@@ -1116,77 +1116,32 @@ async def reg_name(message: Message, state: FSMContext):
 
 @dp.message(Register.age)
 async def reg_age(message: Message, state: FSMContext):
-
-    await message.answer("1")
-
     if not message.text.isdigit():
-        await message.answer("AGE NOT DIGIT")
-        return
-
+        return await message.answer(
+            tr(message.from_user.id, "numbers_only")
+        )
     data = await state.get_data()
-
-    await message.answer(f"2 DATA = {data}")
 
     username = message.from_user.username or "-"
 
-    await message.answer(
-        f"3\n"
-        f"ID = {message.from_user.id}\n"
-        f"NAME = {data.get('name')}\n"
-        f"AGE = {message.text}\n"
-        f"USERNAME = {username}\n"
-        f"LANG = {data.get('language')}"
+    cursor.execute(
+        "INSERT INTO users(user_id, name, age, username, language) VALUES (?, ?, ?, ?, ?)",
+        (
+            message.from_user.id,
+            data["name"],
+            message.text,
+            username,
+            data["language"]
+        )
     )
-
-    try:
-
-        cursor.execute(
-            """
-            INSERT INTO users
-            (user_id, name, age, username, language)
-            VALUES (%s, %s, %s, %s, %s)
-            """,
-            (
-                message.from_user.id,
-                data["name"],
-                message.text,
-                username,
-                data["language"]
-            )
-        )
-
-        await message.answer("4 INSERT OK")
-
-        conn.commit()
-
-        await message.answer("5 COMMIT OK")
-
-    except Exception as e:
-
-        conn.rollback()
-
-        await message.answer(
-            f"ERROR TYPE:\n{type(e).__name__}"
-        )
-
-        await message.answer(
-            f"ERROR TEXT:\n{str(e)}"
-        )
-
-        return
-
-    await message.answer("6")
+    
+    conn.commit()
 
     await message.answer(
         tr(message.from_user.id, "registered"),
         reply_markup=get_main_menu(message.from_user.id)
     )
-
-    await message.answer("7")
-
     await state.clear()
-
-    await message.answer("8")
 
 # ---------------- ADD SECTION ----------------
 
