@@ -1116,29 +1116,42 @@ async def reg_name(message: Message, state: FSMContext):
 
 @dp.message(Register.age)
 async def reg_age(message: Message, state: FSMContext):
-    # if not message.text.isdigit():
-    #     return await message.answer(
-    #         tr(message.from_user.id, "numbers_only")
-    #     )
-    # data = await state.get_data()
 
-    # username = message.from_user.username or "-"
+    await message.answer("1")
 
-    # cursor.execute(
-    #     "INSERT INTO users(user_id, name, age, username, language) VALUES (%s, %s, %s, %s, %s)",
-    #     (
-    #         message.from_user.id,
-    #         data["name"],
-    #         message.text,
-    #         username,
-    #         data["language"]
-    #     )
-    # )
-    
-    # conn.commit()
+    data = await state.get_data()
 
-    await message.answer("REGISTER OK")
+    await message.answer(f"2 {data}")
+
+    username = message.from_user.username or "-"
+
+    try:
+        cursor.execute(
+            "INSERT INTO users(user_id, name, age, username, language) VALUES (%s, %s, %s, %s, %s)",
+            (
+                message.from_user.id,
+                data["name"],
+                message.text,
+                username,
+                data["language"]
+            )
+        )
+
+        await message.answer("3")
+
+        conn.commit()
+
+        await message.answer("4")
+
+    except Exception as e:
+        await message.answer(f"ERROR:\n{e}")
+        return
+
+    await message.answer("5")
+
     await state.clear()
+
+    await message.answer("6")
 
 # ---------------- ADD SECTION ----------------
 
