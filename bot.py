@@ -1124,6 +1124,15 @@ async def reg_age(message: Message, state: FSMContext):
 
     username = message.from_user.username or "-"
 
+    cursor.execute("""
+        SELECT column_name, data_type
+        FROM information_schema.columns
+        WHERE table_name='users'
+        """)
+
+    rows = cursor.fetchall()
+
+    await message.answer(str(rows))
     cursor.execute(
         "INSERT INTO users(user_id, name, age, username, language) VALUES (?, ?, ?, ?, ?)",
         (
