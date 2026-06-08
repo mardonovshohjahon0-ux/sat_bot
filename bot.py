@@ -1116,26 +1116,26 @@ async def reg_name(message: Message, state: FSMContext):
 
 @dp.message(Register.age)
 async def reg_age(message: Message, state: FSMContext):
-    if not message.text.isdigit():
-        return await message.answer(
-            tr(message.from_user.id, "numbers_only")
-        )
-    data = await state.get_data()
+    # if not message.text.isdigit():
+    #     return await message.answer(
+    #         tr(message.from_user.id, "numbers_only")
+    #     )
+    # data = await state.get_data()
 
-    username = message.from_user.username or "-"
+    # username = message.from_user.username or "-"
 
-    cursor.execute(
-        "INSERT INTO users(user_id, name, age, username, language) VALUES (%s, %s, %s, %s, %s)",
-        (
-            message.from_user.id,
-            data["name"],
-            message.text,
-            username,
-            data["language"]
-        )
-    )
+    # cursor.execute(
+    #     "INSERT INTO users(user_id, name, age, username, language) VALUES (%s, %s, %s, %s, %s)",
+    #     (
+    #         message.from_user.id,
+    #         data["name"],
+    #         message.text,
+    #         username,
+    #         data["language"]
+    #     )
+    # )
     
-    conn.commit()
+    # conn.commit()
 
     await message.answer("REGISTER OK")
     await state.clear()
